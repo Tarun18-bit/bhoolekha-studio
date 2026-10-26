@@ -99,6 +99,7 @@ export const VerificationPanel: React.FC<VerificationPanelProps> = ({
   ) => {
     const isSelected = selectedBoxId === field.boundingBox?.id;
     const isEditing = editingKey === field.key;
+    const isNumericCode = field.key.includes('khata') || field.key.includes('gata') || field.key.includes('plot') || field.key.includes('area') || field.key.includes('tax') || field.key.includes('fasli') || field.key.includes('share') || /^\d+$/.test(field.value);
 
     return (
       <div
@@ -150,7 +151,7 @@ export const VerificationPanel: React.FC<VerificationPanelProps> = ({
           </div>
         ) : (
           <div className="flex items-center justify-between gap-2 mt-1">
-            <div className="text-sm font-semibold text-slate-900 font-mono">
+            <div className={`text-sm font-semibold text-slate-900 ${isNumericCode ? 'font-mono' : 'font-sans'}`}>
               {cleanIndicText(field.value)}
             </div>
 
@@ -184,7 +185,7 @@ export const VerificationPanel: React.FC<VerificationPanelProps> = ({
 
         {/* OCR Raw Source text note */}
         <div className="mt-1 flex items-center justify-between text-[11px] text-slate-400">
-          <span>OCR Raw: <span className="font-mono text-slate-600">{field.rawOcrValue}</span></span>
+          <span>OCR Raw: <span className={`${isNumericCode ? 'font-mono' : 'font-sans'} text-slate-600`}>{field.rawOcrValue}</span></span>
           {field.boundingBox && (
             <span className="text-[10px] text-emerald-700 hover:underline">
               {isSelected ? '● Highlighted in scan' : 'Click to inspect in scan'}

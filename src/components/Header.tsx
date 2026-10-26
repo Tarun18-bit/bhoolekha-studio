@@ -60,8 +60,8 @@ export const Header: React.FC<HeaderProps> = ({
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h1 className="text-lg font-bold text-slate-900 leading-tight">
-                  भू-लेखा <span className="text-emerald-700 font-medium">Studio</span>
+                <h1 className="text-xl font-extrabold text-slate-900 leading-tight tracking-tight">
+                  भू-लेखा <span className="text-emerald-700 font-semibold">Studio</span>
                 </h1>
                 <span className="text-[10px] font-semibold bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded">
                   v2.4
