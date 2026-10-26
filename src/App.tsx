@@ -9,6 +9,7 @@ import { ActionBar } from './components/ActionBar';
 import { ExportModal } from './components/ExportModal';
 import { UploadModal } from './components/UploadModal';
 import { CitizenExplainer } from './components/CitizenExplainer';
+import { VoiceAssistantWidget } from './components/VoiceAssistantWidget';
 
 export function App() {
   const [records, setRecords] = useState<LandRecordDocument[]>(SAMPLE_RECORDS);
@@ -317,6 +318,9 @@ export function App() {
         onClose={() => setIsExportOpen(false)}
         record={currentRecord}
       />
+
+      {/* Floating AI Voice Assistant Widget (Bhoo-Mitra AI) */}
+      <VoiceAssistantWidget record={currentRecord} />
     </div>
   );
 }

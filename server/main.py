@@ -60,6 +60,11 @@ class MathVerifyRequest(BaseModel):
     total_stated_area_text: str
     sub_plots_area_texts: List[str]
 
+class AssistantAskRequest(BaseModel):
+    query: str
+    record_context: Dict[str, Any]
+    lang: str = "hi"
+
 @app.get("/api/health")
 async def health_check():
     return {
@@ -141,6 +146,61 @@ async def verify_arithmetic(req: MathVerifyRequest):
         "subplots": subplots_conv,
         "validation": result
     }
+
+@app.post("/api/assistant/ask")
+async def assistant_ask(req: AssistantAskRequest):
+    """
+    Bhoo-Mitra AI Voice Assistant endpoint.
+    Answers natural revenue questions using Gemini 3.8 Flash with deterministic fallback.
+    """
+    import requests
+    import json
+    
+    gemini_key = os.getenv("GEMINI_API_KEY")
+    if gemini_key and gemini_key != "your_key_here":
+        try:
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key={gemini_key}"
+            prompt = f"""
+            You are "भू-मित्र" (Bhoo-Mitra AI), an intelligent, respectful, and authoritative Indian Land Records Voice Assistant.
+            
+            Current Land Record Document Context (JSON):
+            {json.dumps(req.record_context, ensure_ascii=False, indent=2)}
+
+            Citizen's Query: "{req.query}"
+            Assisted Language: "{req.lang}" ('hi' = Hindi, 'en' = Indian English)
+
+            Instructions:
+            1. If asked about owners (who owns the land), state the co-tenure holders, their father/guardian, and that all are legal co-sharers.
+            2. If asked about individual share or "what amount of land is in his part", calculate the exact mathematical proportion in regional units (Biswa / Guntha) and metric (Hectares / m²).
+            3. If asked about bank loans or mortgages, clearly explain any active encumbrances and mandatory NOC requirements. If clean, confirm zero encumbrance.
+            4. If asked about selling or registry, explain category 1-Ka transferable freehold rights.
+            5. Provide ONLY valid JSON with these exact keys:
+               "spoken_text": A natural, conversational sentence WITHOUT brackets, slashes, or raw database codes, optimized for voice readout.
+               "display_text": Formatted markdown text with bullet points and clear numbers.
+               "suggested_follow_ups": Array of 2-3 short relevant follow-up questions.
+            """
+            payload = {
+                "contents": [{"parts": [{"text": prompt}]}]
+            }
+            resp = requests.post(url, json=payload, timeout=3.5)
+            if resp.status_code == 200:
+                result = resp.json()
+                raw_text = result["candidates"][0]["content"]["parts"][0]["text"]
+                cleaned = raw_text.strip().replace("```json", "").replace("```", "").strip()
+                parsed = json.loads(cleaned)
+                return {
+                    "success": True,
+                    "engine": "gemini-3.8-flash",
+                    "spoken_text": parsed.get("spoken_text"),
+                    "display_text": parsed.get("display_text"),
+                    "suggested_follow_ups": parsed.get("suggested_follow_ups", [])
+                }
+        except Exception as e:
+            print(f"[Warning] Gemini Assistant call failed: {e}. Falling back to deterministic engine.")
+
+    # High-precision deterministic revenue engine fallback
+    from assistant_engine import calculate_python_assistant_answer
+    return calculate_python_assistant_answer(req.query, req.record_context, req.lang)
 
 if __name__ == "__main__":
     import uvicorn
