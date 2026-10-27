@@ -27,6 +27,7 @@ from cv_processor import (
 )
 from extractor import extract_land_record_from_image
 from revenue_math import parse_regional_land_area, verify_parcel_arithmetic
+from telephony import telephony_router
 
 app = FastAPI(
     title="BhooLekha Revenue Digitization API",
@@ -42,6 +43,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Mount Telephony Helplines (Exotel / Twilio Webhooks)
+app.include_router(telephony_router)
 
 class PreprocessRequest(BaseModel):
     image_base64: str
