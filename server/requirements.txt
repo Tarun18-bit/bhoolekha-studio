@@ -1,0 +1,13 @@
+fastapi
+uvicorn
+sqlalchemy
+pydantic
+opencv-python-headless
+numpy
+pillow
+pypdfium2
+requests
+# optional: local OCR fallback when Gemini is unavailable (also needs the Tesseract binary)
+pytesseract
+# optional: only for the HTTP checks in smoke_test_validation.py
+httpx
