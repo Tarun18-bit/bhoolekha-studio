@@ -10,7 +10,6 @@ import {
   FileText
 } from 'lucide-react';
 import type { LandRecordDocument } from '../types/landRecord';
-import { parseRegionalLandArea } from '../utils/landMath';
 
 interface UploadModalProps {
   isOpen: boolean;
@@ -25,15 +24,16 @@ export const UploadModal: React.FC<UploadModalProps> = ({
 }) => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [stateName, setStateName] = useState<string>('Bihar');
+  const [stateName, setStateName] = useState<string>('Uttar Pradesh');
   const [recordType, setRecordType] = useState<LandRecordDocument['recordType']>('Khasra-Khatauni');
-  const [villageName, setVillageName] = useState<string>('Madhubani Kalan');
-  const [tehsilName, setTehsilName] = useState<string>('Jhanjharpur');
+  const [villageName, setVillageName] = useState<string>('');
+  const [tehsilName, setTehsilName] = useState<string>('');
   const [deskewAngle, setDeskewAngle] = useState<number>(-2.5);
   const [autoEnhance, setAutoEnhance] = useState<boolean>(true);
 
   // Processing state
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [currentStep, setCurrentStep] = useState<number>(0);
 
   if (!isOpen) return null;
@@ -50,22 +50,52 @@ export const UploadModal: React.FC<UploadModalProps> = ({
     }
   };
 
-  const loadPresetDemoRecord = () => {
-    // Loads preset Bihar Khatiyan scan
-    setPreviewUrl('/sample-scans/up-khasra.svg');
-    setSelectedFile(new File(['dummy'], 'bihar-khatiyan-1972.jpg', { type: 'image/jpeg' }));
-    setStateName('Bihar');
-    setVillageName('Rajnagar East');
-    setTehsilName('Madhubani');
+  const loadPresetDemoRecord = async () => {
+    setStateName('Uttar Pradesh');
+    setVillageName('हीरापुरमचहटी (जौनपुर)');
+    setTehsilName('केराकत (Kerakat)');
+    setRecordType('Khasra-Khatauni');
+    try {
+      const resp = await fetch('/sample-scans/jaunpur-khatauni.jpg');
+      const blob = await resp.blob();
+      const reader = new FileReader();
+      reader.onload = () => {
+        setPreviewUrl(reader.result as string);
+        setSelectedFile(new File([blob], 'jaunpur-khatauni.jpg', { type: 'image/jpeg' }));
+      };
+      reader.readAsDataURL(blob);
+    } catch {
+      setPreviewUrl('/sample-scans/jaunpur-khatauni.jpg');
+    }
   };
 
   const handleStartExtraction = async () => {
-    if (!previewUrl && !selectedFile) return;
+    let activeImageB64 = previewUrl || '';
+    if (!activeImageB64 && !selectedFile) {
+      activeImageB64 = '/sample-scans/up-khasra.svg';
+    }
 
     setIsProcessing(true);
     setCurrentStep(1);
 
-    // Try calling FastAPI backend
+    // If relative path, convert to Base64
+    if (activeImageB64.startsWith('/')) {
+      try {
+        const resp = await fetch(activeImageB64);
+        const blob = await resp.blob();
+        activeImageB64 = await new Promise((resolve) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as string);
+          reader.readAsDataURL(blob);
+        });
+      } catch {
+        // Continue with path
+      }
+    }
+
+    // Call the FastAPI backend
+    let failure = '';
+    setErrorMsg(null);
     try {
       // Step 1: Preprocessing
       await new Promise((r) => setTimeout(r, 600));
@@ -75,11 +105,11 @@ export const UploadModal: React.FC<UploadModalProps> = ({
       await new Promise((r) => setTimeout(r, 700));
       setCurrentStep(3);
 
-      const resp = await fetch('http://127.0.0.1:8000/api/extract', {
+      const resp = await fetch('/api/extract', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          image_base64: previewUrl || '',
+          image_base64: activeImageB64,
           state: stateName,
           record_type: recordType,
           village: villageName,
@@ -96,235 +126,17 @@ export const UploadModal: React.FC<UploadModalProps> = ({
         onClose();
         return;
       }
+      let detail = '';
+      try { detail = (await resp.json()).detail || ''; } catch { /* non-JSON body */ }
+      failure = `Extraction failed (HTTP ${resp.status}). ${detail}`.trim();
     } catch {
-      // Graceful fallback to client-side engine if backend unreachable
+      failure = 'Could not reach the backend at /api/extract. Is it running (python -m uvicorn main:app --port 8001)?';
     }
 
-    // Client-side fallback engine
-    setCurrentStep(4);
-    setTimeout(() => {
-      const statedArea = parseRegionalLandArea('2 Bigha 10 Biswa');
-      const plot1Area = parseRegionalLandArea('1 Bigha 5 Biswa');
-      const plot2Area = parseRegionalLandArea('1 Bigha 5 Biswa');
-
-      const newDoc: LandRecordDocument = {
-        id: `rec-ingested-${Date.now()}`,
-        title: `${stateName} भू-अभिलेख खतियान (${villageName})`,
-        state: stateName,
-        stateCode: stateName === 'Bihar' ? 'BR' : 'KA',
-        district: 'Madhubani (मधुबनी)',
-        tehsil: tehsilName,
-        village: villageName,
-        recordType: recordType,
-        primaryLanguage: 'Hindi',
-        originalDocumentUrl: previewUrl || '/sample-scans/up-khasra.svg',
-        scanCondition: 'Archival Blue-Ink',
-        estimatedYear: 1978,
-
-        khataNumber: {
-          key: 'khataNumber',
-          label: 'Khata Number',
-          regionalLabel: 'खाता संख्या (Khata No.)',
-          value: '00318',
-          rawOcrValue: '००३१८',
-          confidence: 0.91,
-          confidenceTier: 'high',
-          boundingBox: { id: `bb-ingested-khata`, x: 22, y: 15, width: 14, height: 4.5, label: 'Khata 00318' },
-          isVerified: false,
-        },
-
-        fasliYear: {
-          key: 'fasliYear',
-          label: 'Fasli Assessment Year',
-          regionalLabel: 'फसली वर्ष',
-          value: '1385 Fasli (1977-78)',
-          rawOcrValue: '१३८५ फसली',
-          confidence: 0.88,
-          confidenceTier: 'high',
-          boundingBox: { id: `bb-ingested-fasli`, x: 74, y: 15, width: 18, height: 4.5, label: 'Fasli 1385' },
-          isVerified: false,
-        },
-
-        owners: [
-          {
-            id: 'owner-ingested-1',
-            name: {
-              key: 'owner-ing-1-name',
-              label: 'Primary Tenure Holder',
-              regionalLabel: 'रैयत का नाम',
-              value: 'Satya Narayan Jha',
-              rawOcrValue: 'सत्य नारायण झा',
-              confidence: 0.93,
-              confidenceTier: 'high',
-              boundingBox: { id: 'bb-ing-owner-1', x: 12, y: 31, width: 28, height: 5, label: 'सत्य नारायण झा' },
-              isVerified: false,
-            },
-            relationType: 's/o',
-            relativeName: {
-              key: 'owner-ing-1-rel',
-              label: "Father's Name",
-              regionalLabel: 'पिता का नाम',
-              value: 'Harivansh Jha',
-              rawOcrValue: 'हरिवंश झा',
-              confidence: 0.90,
-              confidenceTier: 'high',
-              boundingBox: { id: 'bb-ing-owner-1-rel', x: 42, y: 31, width: 26, height: 5, label: 'हरिवंश झा' },
-              isVerified: false,
-            },
-            shareFraction: {
-              key: 'owner-ing-1-share',
-              label: 'Holding Share',
-              regionalLabel: 'हिस्सा',
-              value: 'Full Title (1/1)',
-              rawOcrValue: 'पूर्ण १/१',
-              confidence: 0.95,
-              confidenceTier: 'high',
-              boundingBox: { id: 'bb-ing-owner-1-share', x: 70, y: 31, width: 10, height: 5, label: '१/१' },
-              isVerified: false,
-            },
-          },
-        ],
-
-        totalStatedArea: {
-          key: 'totalStatedArea',
-          label: 'Total Stated Holding Area',
-          regionalLabel: 'कुल दर्ज रकबा',
-          value: '2 Bigha 10 Biswa (0.6323 Ha)',
-          rawOcrValue: '२ बीघा १० बिस्वा',
-          confidence: 0.94,
-          confidenceTier: 'high',
-          boundingBox: { id: 'bb-ing-total-area', x: 65, y: 62, width: 28, height: 5.5, label: 'कुल २ बीघा १० बिस्वा' },
-          isVerified: false,
-          hasDiscrepancy: false,
-        },
-        totalStatedAreaInSqMeters: statedArea.sqMeters,
-
-        plots: [
-          {
-            id: 'plot-ing-1',
-            khasraNumber: {
-              key: 'plot-ing-1-no',
-              label: 'Khasra / Plot No.',
-              regionalLabel: 'खेसरा संख्या',
-              value: '714/1',
-              rawOcrValue: '७१४/१',
-              confidence: 0.92,
-              confidenceTier: 'high',
-              boundingBox: { id: 'bb-ing-plot-1-no', x: 12, y: 52, width: 14, height: 5, label: 'खेसरा ७१४/१' },
-              isVerified: false,
-            },
-            regionalAreaText: {
-              key: 'plot-ing-1-area',
-              label: 'Plot Area',
-              regionalLabel: 'रकबा',
-              value: '1 Bigha 5 Biswa',
-              rawOcrValue: '१ बीघा ५ बिस्वा',
-              confidence: 0.91,
-              confidenceTier: 'high',
-              boundingBox: { id: 'bb-ing-plot-1-area', x: 28, y: 52, width: 22, height: 5, label: '१ बीघा ५ बिस्वा' },
-              isVerified: false,
-            },
-            areaInSqMeters: plot1Area.sqMeters,
-            areaInHectares: plot1Area.hectares,
-            landClassification: {
-              key: 'plot-ing-1-class',
-              label: 'Classification',
-              regionalLabel: 'किस्म जमीन',
-              value: 'Dhanhar Awwal (Paddy Grade 1)',
-              rawOcrValue: 'धनहर अव्वल',
-              confidence: 0.88,
-              confidenceTier: 'high',
-              boundingBox: { id: 'bb-ing-plot-1-class', x: 52, y: 52, width: 24, height: 5, label: 'धनहर अव्वल' },
-              isVerified: false,
-            },
-            annualRevenueLagaan: {
-              key: 'plot-ing-1-tax',
-              label: 'Lagaan (Cess)',
-              regionalLabel: 'लगान',
-              value: '₹ 18.00',
-              rawOcrValue: '१८.०० रु.',
-              confidence: 0.89,
-              confidenceTier: 'high',
-              boundingBox: { id: 'bb-ing-plot-1-tax', x: 78, y: 52, width: 14, height: 5, label: 'रु. १८.००' },
-              isVerified: false,
-            },
-            boundingBox: { id: 'bb-ing-row-1', x: 10, y: 50, width: 84, height: 8, label: 'खेसरा ७१४/१ पंक्ति' },
-          },
-          {
-            id: 'plot-ing-2',
-            khasraNumber: {
-              key: 'plot-ing-2-no',
-              label: 'Khasra / Plot No.',
-              regionalLabel: 'खेसरा संख्या',
-              value: '714/2',
-              rawOcrValue: '७१४/२',
-              confidence: 0.95,
-              confidenceTier: 'high',
-              boundingBox: { id: 'bb-ing-plot-2-no', x: 12, y: 59, width: 14, height: 5, label: 'खेसरा ७१४/२' },
-              isVerified: false,
-            },
-            regionalAreaText: {
-              key: 'plot-ing-2-area',
-              label: 'Plot Area',
-              regionalLabel: 'रकबा',
-              value: '1 Bigha 5 Biswa',
-              rawOcrValue: '१ बीघा ५ बिस्वा',
-              confidence: 0.94,
-              confidenceTier: 'high',
-              boundingBox: { id: 'bb-ing-plot-2-area', x: 28, y: 59, width: 22, height: 5, label: '१ बीघा ५ बिस्वा' },
-              isVerified: false,
-            },
-            areaInSqMeters: plot2Area.sqMeters,
-            areaInHectares: plot2Area.hectares,
-            landClassification: {
-              key: 'plot-ing-2-class',
-              label: 'Classification',
-              regionalLabel: 'किस्म जमीन',
-              value: 'Bhit Doem (Upland Mixed Crop)',
-              rawOcrValue: 'भीठ दोयम',
-              confidence: 0.89,
-              confidenceTier: 'high',
-              boundingBox: { id: 'bb-ing-plot-2-class', x: 52, y: 59, width: 24, height: 5, label: 'भीठ दोयम' },
-              isVerified: false,
-            },
-            annualRevenueLagaan: {
-              key: 'plot-ing-2-tax',
-              label: 'Lagaan (Cess)',
-              regionalLabel: 'लगान',
-              value: '₹ 15.50',
-              rawOcrValue: '१५.५० रु.',
-              confidence: 0.87,
-              confidenceTier: 'high',
-              boundingBox: { id: 'bb-ing-plot-2-tax', x: 78, y: 59, width: 14, height: 5, label: 'रु. १५.५०' },
-              isVerified: false,
-            },
-            boundingBox: { id: 'bb-ing-row-2', x: 10, y: 58, width: 84, height: 8, label: 'खेसरा ७१४/२ पंक्ति' },
-          },
-        ],
-
-        discrepancies: [],
-        overallConfidence: 0.91,
-        verificationStatus: 'DRAFT_AI_EXTRACTION',
-
-        auditTrail: [
-          {
-            id: `audit-ing-${Date.now()}`,
-            timestamp: new Date().toLocaleString('en-IN') + ' IST',
-            officerId: 'SYS_INGESTION_PIPELINE',
-            officerName: 'AutoIngest-OpenCV-Engine',
-            officerDesignation: 'Multi-stage Restoration Pipeline',
-            action: 'CONFIRMED_MATCH',
-            fieldLabel: 'Automated Ingestion & Deskew',
-            newValue: `Processed with -2.5° rotation correction & Sauvola contrast enhancement`,
-            integrityHash: 'f4b321a980ec89b147df90231bca00129845efcd33441122aaffbbccddeeff00',
-          },
-        ],
-      };
-
-      setIsProcessing(false);
-      onRecordIngested(newDoc);
-      onClose();
-    }, 600);
+    // No client-side fallback: a failed extraction must be visible, never replaced by invented data.
+    setIsProcessing(false);
+    setCurrentStep(0);
+    setErrorMsg(failure || 'Could not reach the extraction service. Is the backend running?');
   };
 
   const steps = [
@@ -473,7 +285,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
                           Supports high-res PNG, JPG, TIFF, or scanned PDF
                         </p>
                       </div>
-                      <div className="pt-2">
+                      <div className="pt-2 flex flex-wrap items-center justify-center gap-2">
                         <button
                           type="button"
                           onClick={(e) => {
@@ -482,7 +294,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
                           }}
                           className="text-xs bg-slate-200 hover:bg-slate-300 text-slate-800 font-semibold px-3 py-1.5 rounded-md transition-colors"
                         >
-                          Use Archival Sample: Bihar 1978 Khatiyan Register
+                          📜 Try Sample: UP Khatauni
                         </button>
                       </div>
                     </div>
@@ -536,14 +348,16 @@ export const UploadModal: React.FC<UploadModalProps> = ({
               {/* Metadata Form */}
               <div className="grid grid-cols-2 gap-3 text-xs">
                 <div>
-                  <label className="font-semibold text-slate-700 block mb-1">State / राज्य:</label>
+                  <label className="font-semibold text-slate-700 block mb-1">State / राज्य / రాష్ట్రం:</label>
                   <select
                     value={stateName}
                     onChange={(e) => setStateName(e.target.value)}
                     className="w-full border border-slate-300 rounded px-2.5 py-1.5 bg-white text-slate-800 focus:ring-2 focus:ring-emerald-500"
                   >
-                    <option value="Bihar">Bihar (बिहार)</option>
+                    <option value="Andhra Pradesh">Andhra Pradesh (ఆంధ్రప్రదేశ్)</option>
+                    <option value="Telangana">Telangana (తెలంగాణ)</option>
                     <option value="Uttar Pradesh">Uttar Pradesh (उत्तर प्रदेश)</option>
+                    <option value="Bihar">Bihar (बिहार)</option>
                     <option value="Maharashtra">Maharashtra (महाराष्ट्र)</option>
                     <option value="Karnataka">Karnataka (ಕರ್ನಾಟಕ)</option>
                     <option value="Punjab">Punjab (ਪੰਜਾਬ)</option>
@@ -551,16 +365,17 @@ export const UploadModal: React.FC<UploadModalProps> = ({
                 </div>
 
                 <div>
-                  <label className="font-semibold text-slate-700 block mb-1">Record Type:</label>
+                  <label className="font-semibold text-slate-700 block mb-1">Record Type / రకం:</label>
                   <select
                     value={recordType}
                     onChange={(e) => setRecordType(e.target.value as any)}
                     className="w-full border border-slate-300 rounded px-2.5 py-1.5 bg-white text-slate-800 focus:ring-2 focus:ring-emerald-500"
                   >
-                    <option value="Khasra-Khatauni">Khasra-Khatauni / Khatiyan</option>
-                    <option value="7/12 Extract (Saat-Baara)">7/12 Extract (Saat-Baara)</option>
-                    <option value="Jamabandi">Jamabandi (Record of Rights)</option>
-                    <option value="Patta/Chitta">Patta / Chitta</option>
+                    <option value="Adangal / Pahani (అడంగల్ / పహణీ)">Adangal / Pahani (గ్రామ లెక్క నెం. 3 - Form 4A)</option>
+                    <option value="Khasra-Khatauni">Khasra-Khatauni / Khatiyan (खसरा-खतौनी)</option>
+                    <option value="7/12 Extract (Saat-Baara)">7/12 Extract (सात-बारा)</option>
+                    <option value="Jamabandi">Jamabandi / RoR (जमाबंदी)</option>
+                    <option value="Patta/Chitta">Patta / Chitta (பட்டா / சிట్టా)</option>
                   </select>
                 </div>
 
@@ -591,6 +406,12 @@ export const UploadModal: React.FC<UploadModalProps> = ({
         </div>
 
         {/* Modal Footer */}
+        {errorMsg && !isProcessing && (
+          <div className="mx-5 mb-3 p-3 rounded-lg border border-rose-300 bg-rose-50 text-xs text-rose-900 whitespace-pre-wrap" role="alert">
+            <b>Extraction did not complete.</b> {errorMsg}
+          </div>
+        )}
+
         {!isProcessing && (
           <div className="px-6 py-3 border-t border-slate-200 bg-slate-50 flex items-center justify-between">
             <button

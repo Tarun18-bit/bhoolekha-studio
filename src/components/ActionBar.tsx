@@ -9,6 +9,7 @@ import type { LandRecordDocument } from '../types/landRecord';
 interface ActionBarProps {
   record: LandRecordDocument;
   onApproveRecord: () => void;
+  canApprove: boolean;
   onResetRecord: () => void;
   onOpenExport: () => void;
 }
@@ -16,6 +17,7 @@ interface ActionBarProps {
 export const ActionBar: React.FC<ActionBarProps> = ({
   record,
   onApproveRecord,
+  canApprove,
   onResetRecord,
   onOpenExport,
 }) => {
@@ -91,7 +93,9 @@ export const ActionBar: React.FC<ActionBarProps> = ({
         ) : (
           <button
             onClick={onApproveRecord}
-            className="text-xs bg-emerald-700 hover:bg-emerald-800 text-white font-semibold px-5 py-2.5 rounded-lg shadow-sm transition-all flex items-center gap-2 hover:shadow-md"
+            disabled={!canApprove}
+            title={canApprove ? undefined : 'Only a verifier or admin can approve and seal'}
+            className="disabled:opacity-40 disabled:cursor-not-allowed text-xs bg-emerald-700 hover:bg-emerald-800 text-white font-semibold px-5 py-2.5 rounded-lg shadow-sm transition-all flex items-center gap-2 hover:shadow-md"
           >
             <CheckCheck className="w-4 h-4" />
             <span>Approve & Digitally Seal Record</span>

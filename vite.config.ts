@@ -8,4 +8,15 @@ export default defineConfig({
     react(),
     tailwindcss(),
   ],
+  server: {
+    // The backend writes uploaded scans / the SQLite DB into these folders while the app runs.
+    // Without this, Vite sees the new files and hard-reloads the page right after every upload.
+    watch: {
+      ignored: ['**/public/uploads/**', '**/server/**', '**/*.db', '**/*.db-wal', '**/*.db-shm', '**/_backup_*/**'],
+    },
+    proxy: {
+      '/api': 'http://127.0.0.1:8001',
+      '/uploads': 'http://127.0.0.1:8001',
+    },
+  },
 })

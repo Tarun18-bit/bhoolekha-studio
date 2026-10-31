@@ -1,0 +1,128 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1350" width="1000" height="1350">
+  <defs>
+    <linearGradient id="mhPaperGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#faf9f4" />
+      <stop offset="50%" stop-color="#f5f0e1" />
+      <stop offset="100%" stop-color="#eadecb" />
+    </linearGradient>
+  </defs>
+
+  <rect x="0" y="0" width="1000" height="1350" fill="url(#mhPaperGrad)" />
+
+  <!-- Outer Border -->
+  <rect x="35" y="35" width="930" height="1280" fill="none" stroke="#4a3e30" stroke-width="2.5" />
+  <rect x="42" y="42" width="916" height="1266" fill="none" stroke="#685743" stroke-width="1" />
+
+  <!-- Header Banner -->
+  <text x="500" y="80" text-anchor="middle" font-family="'Noto Sans Devanagari', 'Mukta', sans-serif" font-size="26" font-weight="bold" fill="#2d2214">
+    महाराष्ट्र शासन - महसूल व वन विभाग
+  </text>
+  <text x="500" y="112" text-anchor="middle" font-family="'Mukta', sans-serif" font-size="20" font-weight="600" fill="#443522">
+    गाव नमुना ७ / १२ (अधिकार अभिलेख पत्रक व पीक पाहणी)
+  </text>
+  <text x="500" y="140" text-anchor="middle" font-family="'Mukta', sans-serif" font-size="16" fill="#665239">
+    गाव: आंबेगाव | तालुका: हवेली | जिल्हा: पुणे | भूमि अभिलेख संकेतस्थळ प्रत
+  </text>
+
+  <!-- Blue Gov Stamp -->
+  <g transform="translate(820, 115) rotate(8)" opacity="0.8">
+    <circle cx="0" cy="0" r="50" fill="none" stroke="#1d428a" stroke-width="2.5" stroke-dasharray="5 2" />
+    <text x="0" y="-18" text-anchor="middle" font-size="9" font-weight="bold" fill="#1d428a">तलाठी कार्यालय</text>
+    <text x="0" y="6" text-anchor="middle" font-size="12" font-weight="bold" fill="#1d428a">हवेली (पुणे)</text>
+    <text x="0" y="24" text-anchor="middle" font-size="9" fill="#1d428a">प्रमाणित नकल</text>
+  </g>
+
+  <!-- Header Info Row -->
+  <rect x="60" y="165" width="880" height="55" fill="#efe4d3" stroke="#685743" stroke-width="1.5" />
+  <line x1="450" y1="165" x2="450" y2="220" stroke="#685743" stroke-width="1.5" />
+
+  <!-- Khata 284 (Bounding Box: x=18%, y=16%, w=14%, h=4.5%) -->
+  <text x="80" y="200" font-family="'Mukta', sans-serif" font-size="18" font-weight="bold" fill="#2d2214">खाते क्रमांक (Khata No.):</text>
+  <text x="270" y="201" font-family="'Mukta', sans-serif" font-size="24" font-weight="900" fill="#132657">२८४ (284)</text>
+
+  <text x="480" y="200" font-family="'Mukta', sans-serif" font-size="18" font-weight="bold" fill="#2d2214">आकारणी वर्ष (Year):</text>
+  <text x="690" y="201" font-family="'Mukta', sans-serif" font-size="21" font-weight="bold" fill="#132657">२००१ - २००२</text>
+
+  <!-- Owners Table -->
+  <rect x="60" y="250" width="880" height="38" fill="#dfd0bd" stroke="#5a4934" stroke-width="1.5" />
+  <text x="500" y="275" text-anchor="middle" font-family="'Mukta', sans-serif" font-size="17" font-weight="bold" fill="#2d2214">
+    गाव नमुना ७ - अधिकार अभिलेख (खातेदार व भोगवटा वर्ग)
+  </text>
+
+  <rect x="60" y="288" width="880" height="180" fill="none" stroke="#5a4934" stroke-width="1.5" />
+  <line x1="420" y1="288" x2="420" y2="468" stroke="#7e6c52" stroke-width="1" />
+  <line x1="720" y1="288" x2="720" y2="468" stroke="#7e6c52" stroke-width="1" />
+
+  <text x="240" y="318" text-anchor="middle" font-size="15" font-weight="bold" fill="#3f3223">खातेदाराचे नाव व पत्ता</text>
+  <text x="570" y="318" text-anchor="middle" font-size="15" font-weight="bold" fill="#3f3223">वडिलांचे / पतीचे नाव</text>
+  <text x="830" y="318" text-anchor="middle" font-size="15" font-weight="bold" fill="#3f3223">हिस्सा / अधिकार प्रकार</text>
+  <line x1="60" y1="332" x2="940" y2="332" stroke="#7e6c52" stroke-width="1" />
+
+  <!-- Owner: Sanjay Tukaram Gaikwad (Bounding box: x=14%, y=32%, w=34%, h=5%) -->
+  <text x="80" y="375" font-family="'Mukta', sans-serif" font-size="20" font-weight="bold" fill="#1a254a">
+    १. संजय तुकाराम गायकवाड
+  </text>
+  <text x="440" y="375" font-family="'Mukta', sans-serif" font-size="19" fill="#283354">
+    तुकाराम मारुतीराव गायकवाड
+  </text>
+  <text x="750" y="375" font-family="'Mukta', sans-serif" font-size="18" font-weight="bold" fill="#1a254a">
+    भोगवटादार वर्ग - १ (समभाग)
+  </text>
+
+  <!-- Land Survey / Gat No Table -->
+  <rect x="60" y="500" width="880" height="38" fill="#dfd0bd" stroke="#5a4934" stroke-width="1.5" />
+  <text x="500" y="525" text-anchor="middle" font-family="'Mukta', sans-serif" font-size="17" font-weight="bold" fill="#2d2214">
+    गाव नमुना १२ - भूमापन गट क्रमांक व क्षेत्र विवरण
+  </text>
+
+  <rect x="60" y="538" width="880" height="280" fill="none" stroke="#5a4934" stroke-width="1.5" />
+  <line x1="220" y1="538" x2="220" y2="818" stroke="#7e6c52" stroke-width="1" />
+  <line x1="480" y1="538" x2="480" y2="818" stroke="#7e6c52" stroke-width="1" />
+  <line x1="740" y1="538" x2="740" y2="818" stroke="#7e6c52" stroke-width="1" />
+
+  <text x="140" y="568" text-anchor="middle" font-size="15" font-weight="bold" fill="#3f3223">गट क्रमांक व हिस्सा</text>
+  <text x="350" y="568" text-anchor="middle" font-size="15" font-weight="bold" fill="#3f3223">आकारणी क्षेत्र (गुंठे / हेक्टर)</text>
+  <text x="610" y="568" text-anchor="middle" font-size="15" font-weight="bold" fill="#3f3223">धारणा प्रकार व जलसाधन</text>
+  <text x="840" y="568" text-anchor="middle" font-size="15" font-weight="bold" fill="#3f3223">आकारणी रु.</text>
+  <line x1="60" y1="582" x2="940" y2="582" stroke="#7e6c52" stroke-width="1" />
+
+  <!-- Gat 109/2A (Bounding Box: x=14%, y=52%, w=14%, h=5%) -->
+  <text x="90" y="625" font-family="'Mukta', sans-serif" font-size="21" font-weight="bold" fill="#132657">गट १०९/२अ</text>
+  <text x="270" y="625" font-family="'Mukta', sans-serif" font-size="20" font-weight="bold" fill="#132657">१८ गुंठे (० हे. १८ आर)</text>
+  <text x="510" y="625" font-family="'Mukta', sans-serif" font-size="17" fill="#2d3345">जिरायत (हंगामी कोरडवाहू)</text>
+  <text x="810" y="625" font-family="'Mukta', sans-serif" font-size="18" font-weight="bold" fill="#132657">८.७५ रु.</text>
+
+  <line x1="60" y1="655" x2="940" y2="655" stroke="#9c876d" stroke-width="0.75" />
+
+  <!-- Gat 109/2B -->
+  <text x="90" y="705" font-family="'Mukta', sans-serif" font-size="21" font-weight="bold" fill="#132657">गट १०९/२ब</text>
+  <text x="270" y="705" font-family="'Mukta', sans-serif" font-size="20" font-weight="bold" fill="#132657">२२ गुंठे (० हे. २२ आर)</text>
+  <text x="510" y="705" font-family="'Mukta', sans-serif" font-size="17" fill="#2d3345">बागायत (विहीर बागायत)</text>
+  <text x="810" y="705" font-family="'Mukta', sans-serif" font-size="18" font-weight="bold" fill="#132657">१२.३० रु.</text>
+
+  <!-- Total Summary Row: 40 Guntha (100% Match!) -->
+  <rect x="60" y="750" width="880" height="55" fill="#e7f1e9" stroke="#22673a" stroke-width="1.5" />
+  <text x="80" y="785" font-family="'Mukta', sans-serif" font-size="18" font-weight="bold" fill="#18562d">
+    एकूण संकलित क्षेत्र (Total Holding Area):
+  </text>
+  <text x="520" y="785" font-family="'Mukta', sans-serif" font-size="22" font-weight="900" fill="#156330">
+    ४० गुंठे = ० हेक्टर ४०.४७ आर (१.०० एकर) ✓
+  </text>
+
+  <!-- Official Stamps & Disclaimers -->
+  <g transform="translate(100, 950)">
+    <text x="0" y="0" font-size="14" font-weight="bold" fill="#3f3223">स्वाक्षरी तलाठी (सझा आंबेगाव)</text>
+    <path d="M 0,25 Q 40,-5 90,30 T 170,10" stroke="#132657" stroke-width="2" fill="none" opacity="0.85" />
+    <text x="0" y="55" font-size="12" fill="#5a4934">दिनांक: २५/१०/२००२</text>
+  </g>
+
+  <g transform="translate(680, 950)">
+    <text x="0" y="0" font-size="14" font-weight="bold" fill="#3f3223">स्वाक्षरी मंडळ अधिकारी (हवेली)</text>
+    <path d="M 10,25 Q 60,-5 120,35 T 210,15" stroke="#132657" stroke-width="2" fill="none" opacity="0.85" />
+    <text x="0" y="55" font-size="12" fill="#5a4934">डिजिटल स्वाक्षरीकृत प्रत</text>
+  </g>
+
+  <text x="500" y="1270" text-anchor="middle" font-size="13" fill="#8c785c" font-style="italic">
+    [हे संगणकीकृत अभिलेख केवळ प्रशासकीय व डिजिटलीकरण सहाय्यासाठी आहे. न्यायालयीन वाद अथवा हक्क सिद्धतेसाठी अधिकृत महसूल कार्यालयाचा दाखला आवश्यक आहे]
+  </text>
+</svg>

@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { 
   ZoomIn, 
   ZoomOut, 
@@ -27,6 +27,17 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
   const [filterMode, setFilterMode] = useState<EnhancementFilter>('normal');
   const [showBoxes, setShowBoxes] = useState<boolean>(true);
   const [hoveredBox, setHoveredBox] = useState<BoundingBox | null>(null);
+  const [imgError, setImgError] = useState<boolean>(false);
+
+  // Reset img error on record switch
+  useEffect(() => {
+    setImgError(false);
+  }, [record.id, record.originalDocumentUrl]);
+
+  const rawUrl = record.originalDocumentUrl || '';
+  const isBrokenOrPdf = rawUrl.startsWith('data:application/pdf') || rawUrl.length < 5;
+  // Never substitute another document's scan: show an honest placeholder instead.
+  const effectiveSrc = (imgError || isBrokenOrPdf) ? '' : rawUrl;
 
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -169,24 +180,31 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
       {/* Main Canvas Scroll Area */}
       <div 
         ref={containerRef}
-        className="flex-1 overflow-auto p-6 flex items-center justify-center relative bg-slate-950/80"
+        className="flex-1 overflow-auto p-4 md:p-8 flex justify-center items-start relative bg-slate-950"
       >
         <div 
-          className="relative transition-transform duration-150 ease-out shadow-2xl rounded-sm"
+          className="relative transition-transform duration-150 ease-out shadow-2xl rounded-sm min-h-[700px] bg-white border border-slate-300"
           style={{
             transform: `scale(${zoom})`,
-            transformOrigin: 'center center',
-            width: '740px',
+            transformOrigin: 'top center',
+            width: '760px',
             maxWidth: '100%',
           }}
         >
           {/* Historical Scanned Document Graphic */}
+          {!effectiveSrc ? (
+            <div className="w-full min-h-[700px] flex items-center justify-center text-sm text-slate-500 p-8 text-center">
+              Original scan image is not available for this record (PDF without a rendered page, or the file could not be loaded).
+            </div>
+          ) : (
           <img
-            src={record.originalDocumentUrl}
+            src={effectiveSrc}
             alt={record.title}
-            className="w-full h-auto rounded-sm block pointer-events-none select-none transition-all duration-200"
+            onError={() => setImgError(true)}
+            className="w-full h-auto min-h-[700px] object-contain rounded-sm block pointer-events-none select-none transition-all duration-200"
             style={getFilterStyle()}
           />
+          )}
 
           {/* Interactive Bounding Box Overlay Layer */}
           {showBoxes && (
@@ -194,6 +212,7 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
               {allBoxes.map((box) => {
                 const isSelected = selectedBoxId === box.id;
                 const isHovered = hoveredBox?.id === box.id;
+                const isIllegibleBox = box.label?.includes('अपठनीय') || box.label?.includes('⚠️') || box.label?.includes('faded') || box.id.includes('faded');
 
                 return (
                   <div
@@ -203,7 +222,11 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
                     onMouseLeave={() => setHoveredBox(null)}
                     className={`absolute cursor-pointer rounded-xs transition-all duration-150 ${
                       isSelected
-                        ? 'border-2 border-emerald-500 bg-emerald-500/25 ring-4 ring-emerald-400/40 z-20 shadow-lg'
+                        ? isIllegibleBox
+                          ? 'border-2 border-red-500 bg-red-500/30 ring-4 ring-red-400/50 z-20 shadow-lg'
+                          : 'border-2 border-emerald-500 bg-emerald-500/25 ring-4 ring-emerald-400/40 z-20 shadow-lg'
+                        : isIllegibleBox
+                        ? 'border-2 border-dashed border-red-500 bg-red-500/20 ring-1 ring-red-400/40 z-10 animate-pulse'
                         : isHovered
                         ? 'border-2 border-amber-400 bg-amber-400/20 z-10'
                         : 'border border-blue-500/50 bg-blue-500/10 hover:border-amber-400 hover:bg-amber-400/20'
@@ -216,10 +239,14 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
                     }}
                   >
                     {/* Floating badge for selected or hovered box */}
-                    {(isSelected || isHovered) && (
+                    {(isSelected || isHovered || isIllegibleBox) && (
                       <div 
                         className={`absolute -top-6 left-0 text-[10px] font-bold px-1.5 py-0.5 rounded shadow-md whitespace-nowrap pointer-events-none z-30 ${
-                          isSelected ? 'bg-emerald-600 text-white' : 'bg-slate-900 text-amber-300'
+                          isIllegibleBox 
+                            ? 'bg-red-700 text-white border border-red-400' 
+                            : isSelected 
+                            ? 'bg-emerald-600 text-white' 
+                            : 'bg-slate-900 text-amber-300'
                         }`}
                       >
                         {box.label}

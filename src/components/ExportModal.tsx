@@ -7,7 +7,10 @@ import {
   FileJson, 
   Award, 
   ShieldCheck, 
-  Building2 
+  Building2,
+  QrCode,
+  CheckCircle2,
+  Fingerprint
 } from 'lucide-react';
 import type { LandRecordDocument } from '../types/landRecord';
 
@@ -27,19 +30,29 @@ export const ExportModal: React.FC<ExportModalProps> = ({
 
   if (!isOpen) return null;
 
-  // Generate standardized DILRMP (Digital India Land Records) compliant JSON
+  const ulpin = (record as any).ulpin || '—';
+  const latestAudit = record.auditTrail && record.auditTrail.length > 0 
+    ? record.auditTrail[0] 
+    : null;
+  const integrityHash = latestAudit?.integrityHash || '';
+
+  // Structured JSON export of the record (our own schema, not an official DILRMP format)
   const standardizedJson = {
     metadata: {
-      standard: 'DILRMP-BHOOMI-V2',
+      standard: 'bhoolekha-studio-export-v1',
+      ulpin: ulpin,
       documentId: record.id,
       state: record.state,
+      stateCode: record.stateCode,
       district: record.district,
       tehsil: record.tehsil,
       village: record.village,
+      lgdCode: (record as any).lgdCode || null,
+      ulpin_note: 'ULPIN not linked; ref is an internal record reference',
       recordType: record.recordType,
       digitizedTimestamp: record.approvedAt || new Date().toISOString(),
-      verifiedByOfficer: record.approvedBy || 'Naib Tehsildar R. K. Mishra (#48291)',
-      cryptographicHash: record.auditTrail[record.auditTrail.length - 1]?.integrityHash || '9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08',
+      verifiedByOfficer: record.approvedBy || 'NOT YET APPROVED',
+      cryptographicHash: integrityHash,
     },
     holding: {
       khataNumber: record.khataNumber.value,
@@ -53,6 +66,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({
       relativeName: o.relativeName.value,
       relationship: o.relationType,
       shareFraction: o.shareFraction.value,
+      isVerified: o.name.isVerified,
     })),
     parcels: record.plots.map((p) => ({
       khasraNumber: p.khasraNumber.value,
@@ -61,12 +75,15 @@ export const ExportModal: React.FC<ExportModalProps> = ({
       areaInHectares: p.areaInHectares,
       landClassification: p.landClassification.value,
       annualRevenueLagaan: p.annualRevenueLagaan.value,
+      chauhaddi: (p as any).chauhaddi || null,
+      hasRoadAccess: (p as any).hasRoadAccess ?? true,
     })),
     auditSummary: {
       totalFieldsVerified: 14,
       aiConfidenceScore: `${(record.overallConfidence * 100).toFixed(0)}%`,
-      humanOfficerReviewComplete: true,
-      nonAdjudicativeDisclaimer: 'Assisted digitization only. Does not confer legal ownership or settle title disputes.',
+      humanOfficerReviewComplete: record.verificationStatus === 'OFFICER_APPROVED',
+      sha256Hash: integrityHash,
+      statutoryNotice: 'Assisted digitization output. Not a certified copy. Officer approval and a tamper-evident audit hash are included; legal certification is outside this tool.',
     },
   };
 
@@ -100,7 +117,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({
                 Official Digitized Land Record Dossier
               </h3>
               <p className="text-xs text-slate-500">
-                National Geo-Portal (Bhoomi / DILRMP) Certified Export
+                Structured export (JSON) for LRMS integration
               </p>
             </div>
           </div>
@@ -145,14 +162,34 @@ export const ExportModal: React.FC<ExportModalProps> = ({
                   <Building2 className="w-6 h-6" />
                 </div>
                 <h4 className="text-xs font-bold tracking-widest text-slate-500 uppercase">
-                  Digital India Land Records Modernization Programme (DILRMP)
+                  BhooLekha Studio · Digitization Output
                 </h4>
                 <h2 className="text-xl font-black text-slate-900">
                   डिजिटलीकृत भू-अभिलेख प्रमाण पत्र
                 </h2>
                 <p className="text-xs text-slate-600">
-                  (Certified Digitized Record of Rights & Land Holdings)
+                  (Digitized Record of Rights — officer-reviewed transcription)
                 </p>
+              </div>
+
+              {/* Record reference */}
+              <div className="my-5 bg-emerald-900 text-white p-3.5 rounded-xl flex items-center justify-between shadow-md border border-emerald-700">
+                <div className="flex items-center gap-3">
+                  <Fingerprint className="w-6 h-6 text-emerald-300 shrink-0" />
+                  <div>
+                    <span className="text-[10px] text-emerald-300 tracking-wider uppercase block font-semibold">
+                      Internal record reference (ULPIN not linked)
+                    </span>
+                    <span className="text-base font-black tracking-widest font-mono text-emerald-100">
+                      {ulpin}
+                    </span>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <span className="text-[10px] bg-emerald-800/80 text-emerald-200 px-2.5 py-1 rounded-md font-mono border border-emerald-700 block">
+                    LGD Code: {(record as any).lgdCode || 'not recorded'}
+                  </span>
+                </div>
               </div>
 
               {/* Record Summary Table */}
@@ -234,28 +271,33 @@ export const ExportModal: React.FC<ExportModalProps> = ({
                 </div>
               </div>
 
-              {/* Digital Signature & Tamper-proof Seal */}
+              {/* Officer approval & audit hash */}
               <div className="mt-8 pt-6 border-t border-emerald-900/20 flex flex-wrap items-center justify-between gap-4 text-xs">
-                <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-lg border-2 border-emerald-800 p-1 flex items-center justify-center font-mono text-[9px] text-center text-emerald-900 font-bold bg-emerald-50">
-                    QR SEAL
+                <div className="flex items-center gap-3.5">
+                  <div className="w-16 h-16 rounded-xl border-2 border-emerald-800 p-1 flex flex-col items-center justify-center font-mono text-[8px] text-center text-emerald-950 font-bold bg-white shadow-xs">
+                    <QrCode className="w-9 h-9 text-emerald-900" />
+                    <span className="tracking-tight text-[8px]">QR (todo)</span>
                   </div>
                   <div>
-                    <p className="font-bold text-slate-900 flex items-center gap-1">
+                    <p className="font-bold text-slate-900 flex items-center gap-1.5 text-xs">
                       <ShieldCheck className="w-4 h-4 text-emerald-600" />
-                      Digitally Verified by {record.approvedBy || 'Naib Tehsildar R. K. Mishra'}
+                      Approved by: {record.approvedBy || 'Not yet approved'}
                     </p>
-                    <p className="font-mono text-[10px] text-slate-400 mt-0.5">
-                      Integrity Hash: 9f86d081884c7d659a2feaa0c55ad015a3bf4f...
+                    <p className="font-mono text-[10px] text-slate-500 mt-0.5 truncate max-w-sm">
+                      Audit chain hash: <span className="text-slate-800 font-semibold">{integrityHash ? integrityHash.slice(0, 32) + '…' : 'none'}</span>
+                    </p>
+                    <p className="text-[10px] text-slate-500 mt-0.5">
+                      Not a certified copy. Legal certification (e.g. under BSA 2023, s.63) is outside this tool.
                     </p>
                   </div>
                 </div>
 
                 <div className="text-right">
-                  <span className="inline-block px-3 py-1 bg-emerald-100 text-emerald-900 font-bold text-xs rounded-full">
-                    OFFICIALLY SEALED ✓
+                  <span className="inline-flex items-center gap-1 px-3 py-1 bg-emerald-100 text-emerald-900 font-bold text-xs rounded-full border border-emerald-300">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-700" />
+                    OFFICIALLY SEALED
                   </span>
-                  <p className="text-[10px] text-slate-400 mt-1">Date: {new Date().toLocaleDateString()}</p>
+                  <p className="text-[10px] text-slate-500 mt-1 font-mono">Date: {record.approvedAt || new Date().toLocaleString()}</p>
                 </div>
               </div>
             </div>

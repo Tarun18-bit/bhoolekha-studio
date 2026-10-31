@@ -33,7 +33,7 @@ def parse_up_bhulekh_pdf_text(text: str, image_base64: str) -> Optional[Dict[str
     elif "जौनपुर" in clean_text:
         district = "जौनपुर"
     else:
-        district = "Uttar Pradesh Revenue District"
+        district = ""
 
     tehsil_match = re.search(r'तहसील\s*:\s*([^\n\r]+)', clean_text)
     if tehsil_match:
@@ -45,7 +45,7 @@ def parse_up_bhulekh_pdf_text(text: str, image_base64: str) -> Optional[Dict[str
     elif "केराकत" in clean_text:
         tehsil = "केराकत"
     else:
-        tehsil = "तहसील"
+        tehsil = ""
 
     village_match = re.search(r'ग्राम\s*:\s*([^\n\r]+)', clean_text)
     if village_match:
@@ -57,12 +57,18 @@ def parse_up_bhulekh_pdf_text(text: str, image_base64: str) -> Optional[Dict[str
     elif "हीरापुर" in clean_text:
         village = "हीरापुरमचहटी"
     else:
-        village = "राजस्व ग्राम"
+        village = ""
 
-    fasli_match = re.search(r'फसली\s*वर्ष\s*:\s*([^\n\r]+)', clean_text)
+    fasli_match = re.search(r'फसली\s*वर्ष\s*[:\s]*([0-9]{4}[^\n\r]*(?:\n[^\n\r]*20\d\d\)?)*)', clean_text)
     if not fasli_match:
-        fasli_match = re.search(r'(\d{4}\s*फ0|\d{4}-\d{4})', clean_text)
-    fasli_year = fasli_match.group(1).strip() if fasli_match else "1426-1433 फसली"
+        fasli_match = re.search(r'फसली\s*वर्ष\s*[:\s]*([^\n\r]+)', clean_text)
+    if not fasli_match:
+        fasli_match = re.search(r'(\d{4}\s*फ[०0]|\d{4}-\d{4})', clean_text)
+    raw_fasli = fasli_match.group(1).strip() if fasli_match else ""
+    raw_fasli = re.sub(r'\s+', ' ', raw_fasli)
+    fasli_year = clean_indic_text(raw_fasli)
+    if re.match(r'^\d{4}\b', fasli_year) and "फसली" not in fasli_year:
+        fasli_year = f"{fasli_year[:4]} फसली {fasli_year[4:].strip()}"
 
     # 2. Khasra / Gata (Plot) Number
     gata_match = re.search(r'(?:खसरा/\s*गाटा\s*संख्या|गाटा|खसरा)\s*[:\s]*(\d{1,4})', clean_text)
@@ -71,7 +77,7 @@ def parse_up_bhulekh_pdf_text(text: str, image_base64: str) -> Optional[Dict[str
         gata_match = re.search(r'\n(\d{2,4})\s+(?:1\)|1\s|0\.)', clean_text)
     if not gata_match:
         gata_match = re.search(r'\b(\d{2,4})\s+1\)', clean_text)
-    gata_no = gata_match.group(1) if gata_match else "861"
+    gata_no = gata_match.group(1) if gata_match else ""   # never invent a plot number
 
     # 3. Strict Khata Number Extraction (Never confuse with Gata number!)
     khata_match = re.search(r'खाता\s*संख्या\s*[:\s]*([0-9]+)', clean_text)
@@ -85,25 +91,25 @@ def parse_up_bhulekh_pdf_text(text: str, image_base64: str) -> Optional[Dict[str
                 break
 
     has_real_khata = khata_match is not None
-    khata_no = khata_match.group(1) if has_real_khata else "00858"
+    khata_no = khata_match.group(1) if has_real_khata else ""   # blank -> manual entry
 
     # 4. Area & Revenue
     area_match = re.search(r'(?:क्षेत्रफल\(हे०\)|कुल क्षेत्रफल\s*:)\s*([0-9.]+)', clean_text)
     if not area_match:
         area_match = re.search(r'([0-9]+\.[0-9]{4,6})', clean_text)
-    area_hectare = float(area_match.group(1)) if area_match else 0.0710
+    area_hectare = float(area_match.group(1)) if area_match else 0.0   # 0 = not found
     area_sq_m = round(area_hectare * 10000.0, 2)
     area_conv = parse_regional_land_area(f"{area_hectare} Hectare")
 
     lagaan_match = re.search(r'(?:कुल\s*भू-राजस्व\s*:|भू-राजस्व|खातेदार देय)\s*[:\s]*([^\n\r]+)', clean_text)
-    lagaan_text = clean_indic_text(lagaan_match.group(1)) if lagaan_match else "₹ 0.01"
+    lagaan_text = clean_indic_text(lagaan_match.group(1)) if lagaan_match else ""
 
     # 5. Extract Individual Owners & Filter Out Mutations / Bank Mortgages
     raw_owners = re.findall(r'(\d+)\)\s*([^\n\r/]+?)\s*/\s*([^\n\r/]+?)\s*/\s*([^\n\r]+)', clean_text)
     
     # Sub-shares if present e.g. 0.023700
     sub_shares = re.findall(r'\b0\.[0-9]{4,6}\b', clean_text)
-    individual_shares = [s for s in sub_shares if float(s) < area_hectare]
+    individual_shares = [s for s in sub_shares if float(s) < area_hectare]   # keep 0.0000: it is printed, and order matters
 
     parsed_owners = []
     seen_names = set()
@@ -128,9 +134,9 @@ def parse_up_bhulekh_pdf_text(text: str, image_base64: str) -> Optional[Dict[str
         # Proportional share text
         owner_idx = len(parsed_owners)
         if owner_idx < len(individual_shares):
-            share_val = f"{individual_shares[owner_idx]} हे० (समभाग)"
+            share_val = f"{individual_shares[owner_idx]} हे०"
         else:
-            share_val = "1/3 हिस्सा (समभाग)"
+            share_val = ""   # not on the document: leave blank, never assume a share
 
         parsed_owners.append({
             "id": f"owner-real-{idx+1}",
@@ -191,52 +197,7 @@ def parse_up_bhulekh_pdf_text(text: str, image_base64: str) -> Optional[Dict[str
             }
         })
 
-    # If Ballia document specific fallback if regex had row layout variations
-    if len(parsed_owners) == 0 and "राजेश" in clean_text:
-        # Structured fallback for Ballia Chainpur Gulaura record
-        default_ballia_owners = [
-            ("राजेश यादव", "रामनक्षत्र यादव"),
-            ("लालबची यादव", "रामनक्षत्र यादव"),
-            ("सुनील यादव", "रामनक्षत्र यादव")
-        ]
-        for b_idx, (b_name, b_rel) in enumerate(default_ballia_owners):
-            parsed_owners.append({
-                "id": f"owner-ballia-{b_idx+1}",
-                "name": {
-                    "key": f"owner-ballia-{b_idx+1}-name",
-                    "label": f"Tenure Holder #{b_idx+1}",
-                    "regionalLabel": "खातेदार का नाम",
-                    "value": b_name,
-                    "rawOcrValue": b_name,
-                    "confidence": 0.99,
-                    "confidenceTier": "high",
-                    "boundingBox": {"id": f"bb-b-o{b_idx+1}", "x": 12.0, "y": 30.0 + (b_idx * 5), "width": 26.0, "height": 4.0, "label": b_name},
-                    "isVerified": True
-                },
-                "relationType": "s/o",
-                "relativeName": {
-                    "key": f"owner-ballia-{b_idx+1}-rel",
-                    "label": "Father/Guardian Name",
-                    "regionalLabel": "पिता का नाम",
-                    "value": b_rel,
-                    "rawOcrValue": b_rel,
-                    "confidence": 0.98,
-                    "confidenceTier": "high",
-                    "boundingBox": {"id": f"bb-b-orel{b_idx+1}", "x": 42.0, "y": 30.0 + (b_idx * 5), "width": 26.0, "height": 4.0, "label": b_rel},
-                    "isVerified": True
-                },
-                "shareFraction": {
-                    "key": f"owner-ballia-{b_idx+1}-share",
-                    "label": "Holding Share",
-                    "regionalLabel": "अंश / भाग",
-                    "value": "0.023700 हे० (1/3 समभाग)",
-                    "rawOcrValue": "1/3 समभाग",
-                    "confidence": 0.98,
-                    "confidenceTier": "high",
-                    "boundingBox": {"id": f"bb-b-osh{b_idx+1}", "x": 70.0, "y": 30.0 + (b_idx * 5), "width": 12.0, "height": 4.0, "label": "1/3 समभाग"},
-                    "isVerified": True
-                }
-            })
+    # No canned fallback: if no owners were parsed, the record goes to manual entry / review.
 
     # 6. Discrepancies & Audit Flags
     discrepancies = []
@@ -326,8 +287,8 @@ def parse_up_bhulekh_pdf_text(text: str, image_base64: str) -> Optional[Dict[str
             "key": "totalStatedArea",
             "label": "Total Stated Holding Area",
             "regionalLabel": "कुल दर्ज क्षेत्रफल",
-            "value": f"{area_hectare} Hectare ({area_conv['formatted']})",
-            "rawOcrValue": f"{area_hectare} हे०",
+            "value": f"{area_hectare:.4f} हेक्टेयर ({area_sq_m:,.0f} वर्ग मीटर · लगभग {round(area_sq_m / 126.464, 1)} बिस्वा)" if area_hectare else "",
+            "rawOcrValue": f"{area_hectare} हे०" if area_hectare else "",
             "confidence": 0.99,
             "confidenceTier": "high",
             "boundingBox": {"id": "bb-up-total-area", "x": 65.0, "y": 62.0, "width": 28.0, "height": 5.5, "label": f"{area_hectare} हे०"},
@@ -343,7 +304,7 @@ def parse_up_bhulekh_pdf_text(text: str, image_base64: str) -> Optional[Dict[str
                     "key": "plot-up-gata",
                     "label": "Gata / Khasra No.",
                     "regionalLabel": "गाटा / खसरा संख्या",
-                    "value": f"गाटा {gata_no}",
+                    "value": f"गाटा {gata_no}" if gata_no else "",
                     "rawOcrValue": gata_no,
                     "confidence": 0.99,
                     "confidenceTier": "high",
@@ -354,8 +315,8 @@ def parse_up_bhulekh_pdf_text(text: str, image_base64: str) -> Optional[Dict[str
                     "key": "plot-up-area",
                     "label": "Plot Area",
                     "regionalLabel": "क्षेत्रफल",
-                    "value": f"{area_hectare} हे० ({area_conv['formatted']})",
-                    "rawOcrValue": f"{area_hectare} हे०",
+                    "value": f"{area_hectare:.4f} हे० ({area_sq_m:,.0f} वर्ग मीटर)" if area_hectare else "",
+                    "rawOcrValue": f"{area_hectare} हे०" if area_hectare else "",
                     "confidence": 0.99,
                     "confidenceTier": "high",
                     "boundingBox": {"id": "bb-up-gata-area", "x": 28.0, "y": 52.0, "width": 22.0, "height": 5.0, "label": f"{area_hectare} हे०"},
@@ -367,7 +328,7 @@ def parse_up_bhulekh_pdf_text(text: str, image_base64: str) -> Optional[Dict[str
                     "key": "plot-up-class",
                     "label": "Classification",
                     "regionalLabel": "भूमि की किस्म",
-                    "value": "1-क (भूमि जो संक्रमणीय भूमिधरों के अधिकार में हो)",
+                    "value": "श्रेणी 1-क · संक्रमणीय भूमिधर (स्वयं की निजी भूमि — बिक्री व वसीयत का पूर्ण अधिकार)",
                     "rawOcrValue": "1-क संक्रमणीय भूमिधर",
                     "confidence": 0.98,
                     "confidenceTier": "high",

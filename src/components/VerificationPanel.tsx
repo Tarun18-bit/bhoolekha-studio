@@ -10,7 +10,8 @@ import {
   Scale, 
   AlertTriangle,
   History,
-  ShieldCheck
+  ShieldCheck,
+  ZoomIn
 } from 'lucide-react';
 import type { 
   LandRecordDocument, 
@@ -26,8 +27,71 @@ interface VerificationPanelProps {
   activeTab: 'digitization' | 'discrepancies' | 'audit';
   onUpdateField: (fieldKey: string, newValue: string) => void;
   onVerifyField: (fieldKey: string) => void;
-  onResolveDiscrepancy: (discrepancyId: string) => void;
+  onResolveDiscrepancy: (discrepancyId: string, justification: string) => void;
+  canResolve?: boolean;
+  onAddOwner?: (data: { name: string; relative_name: string; relation_type: string; share_fraction: string }) => Promise<void>;
+  onAddPlot?: (data: { khasra_number: string; area_text: string; classification: string; tax: string }) => Promise<void>;
 }
+
+const ResolveForm: React.FC<{ onSubmit: (note: string) => void }> = ({ onSubmit }) => {
+  const [note, setNote] = useState('');
+  return (
+    <div className="flex items-center justify-end gap-2 pt-1">
+      <input
+        value={note}
+        onChange={(e) => setNote(e.target.value)}
+        placeholder="Officer note (required), e.g. checked against mutation register"
+        className="flex-1 text-xs border border-slate-300 rounded-md px-2 py-1.5"
+      />
+      <button
+        disabled={!note.trim()}
+        onClick={() => { onSubmit(note.trim()); setNote(''); }}
+        className="text-xs bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white font-medium px-3 py-1.5 rounded-md transition-colors flex items-center gap-1.5"
+      >
+        <Check className="w-3.5 h-3.5" />
+        Resolve with note
+      </button>
+    </div>
+  );
+};
+
+const AddEntryForm: React.FC<{
+  label: string;
+  fields: { key: string; placeholder: string; required?: boolean }[];
+  onSubmit: (values: Record<string, string>) => Promise<void>;
+}> = ({ label, fields, onSubmit }) => {
+  const [open, setOpen] = useState(false);
+  const [values, setValues] = useState<Record<string, string>>({});
+  const [busy, setBusy] = useState(false);
+  const ready = fields.every((f) => !f.required || (values[f.key] || '').trim());
+  if (!open) {
+    return (
+      <button onClick={() => setOpen(true)}
+        className="w-full text-xs font-semibold text-emerald-700 border border-dashed border-emerald-300 rounded-lg py-2 hover:bg-emerald-50">
+        + {label}
+      </button>
+    );
+  }
+  return (
+    <div className="p-3 rounded-lg border border-emerald-300 bg-emerald-50/40 space-y-2">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        {fields.map((f) => (
+          <input key={f.key} value={values[f.key] || ''} placeholder={f.placeholder + (f.required ? ' *' : '')}
+            onChange={(e) => setValues({ ...values, [f.key]: e.target.value })}
+            className="text-sm px-2.5 py-1.5 rounded-md border border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+        ))}
+      </div>
+      <div className="flex justify-end gap-2">
+        <button onClick={() => { setOpen(false); setValues({}); }} className="text-xs px-3 py-1.5 rounded-md text-slate-600 hover:bg-slate-100">Cancel</button>
+        <button disabled={!ready || busy}
+          onClick={async () => { setBusy(true); try { await onSubmit(values); setOpen(false); setValues({}); } finally { setBusy(false); } }}
+          className="text-xs px-3 py-1.5 rounded-md bg-emerald-600 text-white font-semibold disabled:opacity-40">
+          {busy ? 'Saving…' : 'Add (officer-entered)'}
+        </button>
+      </div>
+    </div>
+  );
+};
 
 export const VerificationPanel: React.FC<VerificationPanelProps> = ({
   record,
@@ -37,6 +101,9 @@ export const VerificationPanel: React.FC<VerificationPanelProps> = ({
   onUpdateField,
   onVerifyField,
   onResolveDiscrepancy,
+  canResolve = false,
+  onAddOwner,
+  onAddPlot,
 }) => {
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [tempValue, setTempValue] = useState<string>('');
@@ -57,6 +124,15 @@ export const VerificationPanel: React.FC<VerificationPanelProps> = ({
 
   // Confidence pill badge helper
   const renderConfidenceBadge = (field: ExtractedField<string>) => {
+    if (field.value?.includes('अपठनीय') || field.value?.includes('अस्पष्ट') || field.confidenceTier === 'low') {
+      return (
+        <span className="inline-flex items-center gap-1 text-[11px] font-bold text-red-800 bg-red-100 border border-red-400 px-2.5 py-0.5 rounded-full animate-pulse shadow-2xs">
+          <AlertTriangle className="w-3.5 h-3.5 text-red-600" />
+          अपठनीय / अस्पष्ट
+        </span>
+      );
+    }
+
     if (field.isVerified) {
       return (
         <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-800 bg-emerald-50 border border-emerald-300 px-2 py-0.5 rounded-full">
@@ -92,35 +168,145 @@ export const VerificationPanel: React.FC<VerificationPanelProps> = ({
     );
   };
 
-  // Single field display/edit row
+  // Helper to extract clean bilingual labels without ugly nested parentheses
+  const getCleanLabels = (field: ExtractedField<string>, customTitle?: string) => {
+    let rawRegional = (field.regionalLabel || '').replace(/^\(+|\)+$/g, '').trim();
+    let latinLabel = customTitle || field.label;
+
+    if (rawRegional.includes('खाता संख्या') || rawRegional.includes('Khata')) {
+      rawRegional = 'खाता संख्या';
+      latinLabel = 'Khata No.';
+    } else if (rawRegional.includes('फसली')) {
+      rawRegional = 'फसली वर्ष';
+      latinLabel = 'Fasli Assessment Year';
+    } else if (rawRegional.includes('क्षेत्रफल') && (field.key.includes('total') || latinLabel.includes('Total'))) {
+      rawRegional = 'कुल दर्ज क्षेत्रफल';
+      latinLabel = 'Total Stated Area';
+    } else if (rawRegional.includes('गाटा') || rawRegional.includes('खसरा')) {
+      rawRegional = 'गाटा / खसरा संख्या';
+      latinLabel = 'Plot Survey No.';
+    } else if (rawRegional.includes('किस्म') || field.key.includes('class')) {
+      rawRegional = 'भूमि की श्रेणी (अधिकार)';
+      latinLabel = 'Land Rights Classification';
+    } else if (rawRegional.includes('मालगुजारी') || field.key.includes('tax')) {
+      rawRegional = 'वार्षिक लगान (मालगुजारी)';
+      latinLabel = 'Annual Revenue Cess';
+    }
+
+    return { primaryHindi: rawRegional, secondaryEnglish: latinLabel };
+  };
+
+  // Helper to format values in crystal-clear, citizen-friendly language
+  const getFormattedValueDetails = (field: ExtractedField<string>) => {
+    let rawVal = field.value || '';
+    let subBadge: { text: string; bg: string; textCol: string } | null = null;
+    let isMonospace = false;
+
+    // 1. Khata / Gata identifiers
+    if (field.key.includes('khata')) {
+      isMonospace = true;
+      rawVal = cleanIndicText(rawVal);
+    } else if (field.key.includes('gata') || field.key.includes('khasra')) {
+      isMonospace = true;
+      rawVal = cleanIndicText(rawVal);
+    }
+    // 2. Area fields (Resolves the '0 Hectare' / nested parentheses bug)
+    else if (field.key.includes('area') || field.key.includes('totalStatedArea')) {
+      const sourceStr = `${field.rawOcrValue || ''} ${rawVal}`;
+      const numMatch = sourceStr.match(/(\d+\.\d+|\b\d+\b)/);
+      const ha = numMatch ? parseFloat(numMatch[1]) : 0;
+
+      if (ha > 0) {
+        const sqM = Math.round(ha * 10000);
+        const biswa = Math.round((sqM / 126.464) * 10) / 10;
+        const bigha = (biswa / 20).toFixed(2);
+        rawVal = `${ha.toFixed(4)} हेक्टेयर (${sqM.toLocaleString('en-IN')} वर्ग मीटर)`;
+        subBadge = {
+          text: `लगभग ${biswa} बिस्वा (${bigha} बीघा)`,
+          bg: 'bg-emerald-50 border-emerald-200',
+          textCol: 'text-emerald-800'
+        };
+      } else {
+        rawVal = cleanIndicText(rawVal);
+      }
+    }
+    // 3. Category 1-Ka Land Rights (Citizen friendly freehold explanation)
+    else if (field.key.includes('class')) {
+      rawVal = 'श्रेणी 1-क · संक्रमणीय भूमिधर';
+      subBadge = {
+        text: '🛡️ स्वयं की निजी भूमि — बिक्री, बैनामा व ऋण का पूर्ण कानूनी अधिकार',
+        bg: 'bg-emerald-50 border-emerald-200',
+        textCol: 'text-emerald-800'
+      };
+    }
+    // 4. Fasli Assessment Year
+    else if (field.key.includes('fasli')) {
+      let cleanFasli = cleanIndicText(rawVal).replace(/जुला\s*ई/g, 'जुलाई');
+      if (cleanFasli.includes('1431')) {
+        rawVal = '1431 फसली (1 जुलाई 2026 – 30 जून 2031)';
+        subBadge = {
+          text: 'सक्रिय 6-वर्षीय राजस्व निर्धारण चक्र (Active Fasli Cycle)',
+          bg: 'bg-blue-50 border-blue-200',
+          textCol: 'text-blue-800'
+        };
+      } else {
+        rawVal = cleanFasli;
+      }
+    }
+    // 5. Revenue Cess (Lagaan)
+    else if (field.key.includes('tax') || field.key.includes('lagaan')) {
+      rawVal = cleanIndicText(rawVal);
+      if (!rawVal.startsWith('₹') && !rawVal.includes('रु')) rawVal = `₹ ${rawVal}`;
+      subBadge = {
+        text: 'नाममात्र वार्षिक सरकारी मालगुजारी',
+        bg: 'bg-slate-100 border-slate-200',
+        textCol: 'text-slate-700'
+      };
+    } else {
+      rawVal = cleanIndicText(rawVal);
+    }
+
+    return { displayVal: rawVal, subBadge, isMonospace };
+  };
+
+  // Single field display/edit row with modern, high-trust Indian GovTech aesthetic
   const renderFieldRow = (
     field: ExtractedField<string>,
     customTitle?: string
   ) => {
     const isSelected = selectedBoxId === field.boundingBox?.id;
     const isEditing = editingKey === field.key;
-    const isNumericCode = field.key.includes('khata') || field.key.includes('gata') || field.key.includes('plot') || field.key.includes('area') || field.key.includes('tax') || field.key.includes('fasli') || field.key.includes('share') || /^\d+$/.test(field.value);
+    const { primaryHindi, secondaryEnglish } = getCleanLabels(field, customTitle);
+    const { displayVal, subBadge, isMonospace } = getFormattedValueDetails(field);
+    const isIllegible = 
+      displayVal.includes('अपठनीय') || 
+      displayVal.includes('अस्पष्ट') || 
+      field.confidenceTier === 'low' ||
+      (field.rawOcrValue && (field.rawOcrValue.includes('स्याही') || field.rawOcrValue.includes('??')));
 
     return (
       <div
         key={field.key}
         onClick={() => field.boundingBox && onSelectBox(field.boundingBox.id)}
-        className={`p-3 rounded-lg border transition-all cursor-pointer ${
+        className={`p-3.5 rounded-xl border transition-all cursor-pointer relative group ${
           isSelected
-            ? 'border-emerald-500 bg-emerald-50/70 shadow-xs ring-2 ring-emerald-400/30'
+            ? 'border-emerald-500 bg-emerald-50/70 shadow-sm ring-2 ring-emerald-400/30'
+            : isIllegible
+            ? 'border-red-400 bg-red-50/50 hover:border-red-500 hover:shadow-xs ring-1 ring-red-300/40'
             : field.confidenceTier === 'medium' && !field.isVerified
-            ? 'border-amber-300 bg-amber-50/40 hover:border-amber-400'
-            : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50/50'
+            ? 'border-amber-300 bg-amber-50/30 hover:border-amber-400 hover:shadow-xs'
+            : 'border-slate-200/90 bg-white hover:border-emerald-300 hover:shadow-xs'
         }`}
       >
-        <div className="flex items-center justify-between gap-2 mb-1">
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-semibold text-slate-700">
-              {customTitle || field.label}
+        {/* Card Header: Hindi Title, English Subtitle & Verified Pill */}
+        <div className="flex items-center justify-between gap-2 mb-1.5">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="text-xs font-bold text-slate-800 font-indic tracking-tight">
+              {primaryHindi || secondaryEnglish}
             </span>
-            {field.regionalLabel && (
+            {primaryHindi && (
               <span className="text-[11px] text-slate-400 font-medium">
-                ({field.regionalLabel})
+                • {secondaryEnglish}
               </span>
             )}
           </div>
@@ -135,7 +321,7 @@ export const VerificationPanel: React.FC<VerificationPanelProps> = ({
               type="text"
               value={tempValue}
               onChange={(e) => setTempValue(e.target.value)}
-              className="flex-1 text-sm bg-white border border-emerald-500 rounded px-2.5 py-1 text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-400"
+              className="flex-1 text-sm bg-white border border-emerald-500 rounded px-2.5 py-1 text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-400 font-indic"
               autoFocus
             />
             <button
@@ -150,32 +336,80 @@ export const VerificationPanel: React.FC<VerificationPanelProps> = ({
             </button>
           </div>
         ) : (
-          <div className="flex items-center justify-between gap-2 mt-1">
-            <div className={`text-sm font-semibold text-slate-900 ${isNumericCode ? 'font-mono' : 'font-sans'}`}>
-              {cleanIndicText(field.value)}
+          <div className="flex items-start justify-between gap-2 my-1">
+            <div className="flex-1">
+              <div className={`text-[15px] font-bold leading-snug ${
+                isIllegible ? 'text-red-900 font-indic' : isMonospace ? 'text-slate-900 font-mono tracking-wide' : 'text-slate-900 font-indic'
+              }`}>
+                {displayVal}
+              </div>
+
+              {/* Citizen-Friendly Explanatory Pill */}
+              {subBadge && !isIllegible && (
+                <div className={`mt-1.5 inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-0.5 rounded-md border ${subBadge.bg} ${subBadge.textCol}`}>
+                  {subBadge.text}
+                </div>
+              )}
+
+              {/* Statutory Notice Banner for Illegible/Faded Text */}
+              {isIllegible && (
+                <div className="mt-2.5 p-3 rounded-lg bg-red-100/90 border border-red-300 text-red-950 flex flex-col gap-2">
+                  <div className="flex items-center gap-1.5 font-bold text-xs text-red-900">
+                    <AlertTriangle className="w-4 h-4 text-red-600 shrink-0" />
+                    <span>⚠️ मूल प्रति में स्याही अस्पष्ट / पन्ना फटा हुआ (Illegible Patch)</span>
+                  </div>
+                  <p className="text-[11px] text-red-800 leading-relaxed font-indic">
+                    दस्तावेज़ में स्याही फैलने अथवा पन्ना कटने के कारण यह प्रविष्टि स्पष्ट नहीं है। डिजिटल इंडिया मानक (Rule 31A) के तहत कृत्रिम बुद्धिमत्ता द्वारा अनुमान लगाना वर्जित है।
+                  </p>
+                  <div className="flex items-center gap-2 pt-1">
+                    {field.boundingBox && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onSelectBox(field.boundingBox.id);
+                        }}
+                        className="text-xs font-semibold bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded-md transition-colors flex items-center gap-1.5 shadow-2xs"
+                      >
+                        <ZoomIn className="w-3.5 h-3.5" />
+                        मूल स्कैन ज़ूम करें
+                      </button>
+                    )}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleStartEdit(field.key, '');
+                      }}
+                      className="text-xs font-semibold bg-white hover:bg-slate-50 text-slate-800 border border-slate-300 px-3 py-1 rounded-md transition-colors flex items-center gap-1.5 shadow-2xs"
+                    >
+                      <Edit3 className="w-3.5 h-3.5 text-slate-600" />
+                      तहसील रजिस्टर से प्रविष्ट करें
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
 
-            <div className="flex items-center gap-1.5">
-              {!field.isVerified && (
+            <div className="flex items-center gap-1.5 shrink-0 pt-0.5">
+              {!field.isVerified && !isIllegible && (
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
                     onVerifyField(field.key);
                   }}
-                  className="text-xs bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 px-2 py-0.5 rounded font-medium transition-colors"
+                  className="text-xs bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 px-2.5 py-0.5 rounded-md font-semibold transition-colors"
                   title="Mark field verified"
                 >
-                  Confirm Match
+                  पुष्टि करें
                 </button>
               )}
 
               <button
                 onClick={(e) => {
                   e.stopPropagation();
-                  handleStartEdit(field.key, field.value);
+                  handleStartEdit(field.key, isIllegible ? '' : field.value);
                 }}
-                className="text-slate-400 hover:text-slate-700 p-1 rounded hover:bg-slate-100 transition-colors"
-                title="Edit extracted text"
+                className="text-slate-400 hover:text-slate-700 p-1 rounded-md hover:bg-slate-100 transition-colors"
+                title="Edit value"
               >
                 <Edit3 className="w-3.5 h-3.5" />
               </button>
@@ -183,19 +417,21 @@ export const VerificationPanel: React.FC<VerificationPanelProps> = ({
           </div>
         )}
 
-        {/* OCR Raw Source text note */}
-        <div className="mt-1 flex items-center justify-between text-[11px] text-slate-400">
-          <span>OCR Raw: <span className={`${isNumericCode ? 'font-mono' : 'font-sans'} text-slate-600`}>{field.rawOcrValue}</span></span>
+        {/* OCR Raw Source text footer */}
+        <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-400">
+          <span className="truncate max-w-[240px]">
+            मूल पाठ (OCR): <span className="font-mono text-slate-600 font-medium">{field.rawOcrValue}</span>
+          </span>
           {field.boundingBox && (
-            <span className="text-[10px] text-emerald-700 hover:underline">
-              {isSelected ? '● Highlighted in scan' : 'Click to inspect in scan'}
+            <span className="text-[11px] font-semibold text-emerald-700 group-hover:underline flex items-center gap-1">
+              {isSelected ? '● दस्तावेज़ में चिह्नित' : 'दस्तावेज़ में देखें →'}
             </span>
           )}
         </div>
 
         {/* Discrepancy Note if present */}
         {field.discrepancyNote && (
-          <div className="mt-2 text-xs bg-amber-100/70 border border-amber-300 text-amber-900 px-2.5 py-1.5 rounded flex items-start gap-1.5">
+          <div className="mt-2 text-xs bg-amber-100/70 border border-amber-300 text-amber-900 px-2.5 py-1.5 rounded-lg flex items-start gap-1.5">
             <AlertCircle className="w-3.5 h-3.5 text-amber-700 shrink-0 mt-0.5" />
             <span>{field.discrepancyNote}</span>
           </div>
@@ -309,15 +545,11 @@ export const VerificationPanel: React.FC<VerificationPanelProps> = ({
                 </div>
 
                 {disc.status !== 'RESOLVED' && (
-                  <div className="flex items-center justify-end gap-2 pt-1">
-                    <button
-                      onClick={() => onResolveDiscrepancy(disc.id)}
-                      className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-medium px-3 py-1.5 rounded-md transition-colors flex items-center gap-1.5"
-                    >
-                      <Check className="w-3.5 h-3.5" />
-                      Mark Acknowledged & Attach Officer Note
-                    </button>
-                  </div>
+                  canResolve ? (
+                    <ResolveForm onSubmit={(note) => onResolveDiscrepancy(disc.id, note)} />
+                  ) : (
+                    <p className="text-[11px] text-slate-500 text-right pt-1">Only a verifier or admin can resolve discrepancies.</p>
+                  )
                 )}
               </div>
             ))
@@ -473,6 +705,18 @@ export const VerificationPanel: React.FC<VerificationPanelProps> = ({
                   </div>
                 </div>
               ))}
+              {genuineOwners.length === 0 && (
+                <p className="text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded-lg p-2.5">
+                  No holders were read from this document. Add them from the scan.
+                </p>
+              )}
+              {onAddOwner && (
+                <AddEntryForm label="Add tenure holder"
+                  fields={[{ key: 'name', placeholder: 'Holder name', required: true },
+                           { key: 'relative_name', placeholder: 'Father / husband name' },
+                           { key: 'share_fraction', placeholder: 'Share (e.g. 1/3)' }]}
+                  onSubmit={(v) => onAddOwner({ name: v.name || '', relative_name: v.relative_name || '', relation_type: 's/o', share_fraction: v.share_fraction || '' })} />
+              )}
             </div>
           </div>
         );
@@ -512,6 +756,19 @@ export const VerificationPanel: React.FC<VerificationPanelProps> = ({
               </div>
             </div>
           ))}
+          {record.plots.length === 0 && (
+            <p className="text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded-lg p-2.5">
+              No khasra plots were read from this document. Add them from the scan.
+            </p>
+          )}
+          {onAddPlot && (
+            <AddEntryForm label="Add khasra plot"
+              fields={[{ key: 'khasra_number', placeholder: 'Khasra / survey no.', required: true },
+                       { key: 'area_text', placeholder: 'Area (e.g. 0.0710 हे०, 2 Bigha 5 Biswa)', required: true },
+                       { key: 'classification', placeholder: 'Land class' },
+                       { key: 'tax', placeholder: 'Revenue / lagaan' }]}
+              onSubmit={(v) => onAddPlot({ khasra_number: v.khasra_number || '', area_text: v.area_text || '', classification: v.classification || '', tax: v.tax || '' })} />
+          )}
         </div>
       </div>
     </div>

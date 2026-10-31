@@ -1,5 +1,5 @@
 import re
-from typing import Set
+from typing import List, Set
 
 COMBINING_MARKS = re.compile(r'([\u0900-\u097F])\s+([\u0901-\u0903\u093A-\u094F\u0951-\u0957\u0962-\u0963])')
 
@@ -7,6 +7,7 @@ KNOWN_INDIC_WORDS = [
     (re.compile(r'रा\s*जे\s*श'), 'राजेश'),
     (re.compile(r'या\s*द\s*व'), 'यादव'),
     (re.compile(r'रा\s*म\s*न\s*क्ष\s*त्र'), 'रामनक्षत्र'),
+    (re.compile(r'रा\s*म\s*ने\s*वा\s*ज'), 'रामनेवाज'),
     (re.compile(r'ला\s*ल\s*ब\s*ची'), 'लालबची'),
     (re.compile(r'सु\s*नी\s*ल'), 'सुनील'),
     (re.compile(r'शि\s*व\s*स\s*र\s*न'), 'शिवसरन'),
@@ -40,7 +41,11 @@ KNOWN_INDIC_WORDS = [
     (re.compile(r'म\s*च\s*ह\s*टी'), 'मचहटी'),
     (re.compile(r'म\s*हु\s*आ\s*र'), 'महुआर'),
     (re.compile(r'सं\s*क्र\s*म\s*णी\s*य'), 'संक्रमणीय'),
+    (re.compile(r'जो\s*सं\s*क्र\s*म\s*णी\s*य|जोसंक्रमणीय'), 'जो संक्रमणीय'),
+    (re.compile(r'जु\s*ला\s*ई'), 'जुलाई'),
     (re.compile(r'भू\s*मि\s*ध\s*र'), 'भूमिधर'),
+    (re.compile(r'फ\s*स\s*ली'), 'फसली'),
+    (re.compile(r'हे\s*०|हे\s*0'), 'हे०'),
     (re.compile(r'क्ष\s*े\s*त्र\s*फ\s*ल'), 'क्षेत्रफल'),
     (re.compile(r'खा\s*ता'), 'खाता'),
     (re.compile(r'गा\s*टा'), 'गाटा'),
@@ -62,8 +67,9 @@ def clean_indic_text(text: str) -> str:
         return ""
     t = text.strip()
 
-    # 1. Strip leading numbering like '1) ', '1. ', '(1) ', '1 - '
-    t = re.sub(r'^\s*(?:\d+[\.\)\-:]|\(\d+\))\s*', '', t)
+    # 1. Strip leading numbering like '1) ', '1. ' (ONLY when not a decimal like 1.0 or code like 1-Ka)
+    t = re.sub(r'^\s*(?:\(\d+\)|\d+\))\s*', '', t)
+    t = re.sub(r'^\s*\d+\.\s+(?=[^\d\s])', '', t)
 
     # 2. Join split matras e.g. 'र ' + 'ा' -> 'रा'
     t = COMBINING_MARKS.sub(r'\1\2', t)
@@ -71,6 +77,17 @@ def clean_indic_text(text: str) -> str:
     # 3. Known dictionary terms
     for pattern, rep in KNOWN_INDIC_WORDS:
         t = pattern.sub(rep, t)
+
+    # 4a. Join a 1-2 letter fragment onto the previous word when that word ends in a vowel sign
+    #     (PDF kerning split: "रामकुमा र" -> "रामकुमार", "महे श" -> "महेश")
+    pre: List[str] = []
+    for tok in t.split():
+        if (pre and len(tok) <= 2 and re.match(r'^[\u0900-\u097F]+$', tok) and tok not in INDIC_STOP_WORDS
+                and re.search(r'[\u093E-\u094C]$', pre[-1]) and re.match(r'^[\u0900-\u097F]+$', pre[-1])):
+            pre[-1] += tok
+        else:
+            pre.append(tok)
+    t = " ".join(pre)
 
     # 4. Smart Devanagari short-token stitcher
     tokens = t.split()
@@ -97,23 +114,35 @@ def clean_indic_text(text: str) -> str:
     clean = re.sub(r'\s*[/]\s*ग्राम.*$', '', clean)
     return clean.strip()
 
+def devanagari_to_arabic_numerals(text: str) -> str:
+    """Converts Devanagari numerals (०-९) to Hindu-Arabic numerals (0-9)."""
+    if not text:
+        return ""
+    dev_digits = "०१२३४५६७८९"
+    arab_digits = "0123456789"
+    trans = str.maketrans(dev_digits, arab_digits)
+    return text.translate(trans)
+
 def is_mutation_or_non_owner(text: str) -> bool:
     """
     Determines if a candidate name is a mutation order, court remark, or bank detail.
+    Supports ALL Indian scripts: Devanagari, Telugu, Kannada, Tamil, Malayalam, Bengali, Gujarati, Odia, Gurmukhi, and English.
     """
     if not text:
-        return True
+        return False
     
     clean = clean_indic_text(text).replace(" ", "").lower()
 
-    # Reject if no Indic characters or pure numbers
-    if not re.search(r'[\u0900-\u097F]', clean):
+    # Reject if no Indic or Latin alphabetic characters, or pure numbers
+    # Unicode Indic blocks: \u0900-\u0D7F encompasses Devanagari, Bengali, Gurmukhi, Gujarati, Oriya, Tamil, Telugu, Kannada, Malayalam
+    if not re.search(r'[\u0900-\u0D7F\u0041-\u005A\u0061-\u007A]', clean):
         return True
     
-    # Reject dates, footer residue, or order keywords
+    # Reject pure numbers or single characters
     if re.match(r'^\d+$', clean) or len(clean) < 2:
         return True
 
+    # Check for mutation/court orders in Hindi, Telugu, and English
     reject_patterns = [
         "उत्तराधिकार",
         "वरासत",
@@ -148,5 +177,11 @@ def is_mutation_or_non_owner(text: str) -> bool:
         "पृष्ठ",
         "https",
         "http",
+        "ఆదేశం",
+        "కోర్టు",
+        "వివాదం",
+        "తీర్పు",
+        "రిజిస్ట్రార్",
+        "బ్యాంక్",
     ]
     return any(p in clean for p in reject_patterns)

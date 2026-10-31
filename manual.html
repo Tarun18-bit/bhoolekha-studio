@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>BhooLekha Studio — Simple Team Guide & Presentation Cheat Sheet</title>
+<style>
+  @page {
+    size: A4;
+    margin: 15mm 14mm 15mm 14mm;
+    @bottom-right {
+      content: counter(page);
+    }
+  }
+  * {
+    box-sizing: border-box;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+    color: #1e293b;
+    background-color: #ffffff;
+    line-height: 1.6;
+    font-size: 10.5pt;
+    margin: 0;
+    padding: 0;
+  }
+  .page-break {
+    page-break-before: always;
+  }
+  .header-card {
+    background: linear-gradient(135deg, #065f46 0%, #059669 100%);
+    color: #ffffff;
+    padding: 24px;
+    border-radius: 12px;
+    margin-bottom: 20px;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+  }
+  .header-card h1 {
+    font-size: 24pt;
+    margin: 0 0 6px 0;
+    font-weight: 800;
+  }
+  .header-card .subtitle {
+    font-size: 12pt;
+    color: #a7f3d0;
+    margin: 0 0 14px 0;
+    font-weight: 500;
+  }
+  .tag {
+    display: inline-block;
+    padding: 3px 8px;
+    border-radius: 5px;
+    font-size: 8.5pt;
+    font-weight: 600;
+    background: rgba(255,255,255,0.22);
+    color: #ffffff;
+    margin-right: 6px;
+  }
+  h2 {
+    color: #065f46;
+    font-size: 15pt;
+    font-weight: 700;
+    border-bottom: 2.5px solid #10b981;
+    padding-bottom: 5px;
+    margin-top: 24px;
+    margin-bottom: 12px;
+  }
+  h3 {
+    color: #0f172a;
+    font-size: 12pt;
+    font-weight: 700;
+    margin-top: 16px;
+    margin-bottom: 6px;
+  }
+  p {
+    margin: 0 0 10px 0;
+  }
+  .highlight-box {
+    background-color: #f0fdf4;
+    border-left: 5px solid #10b981;
+    padding: 12px 16px;
+    border-radius: 0 8px 8px 0;
+    margin: 14px 0;
+    font-size: 10pt;
+  }
+  .highlight-warning {
+    background-color: #fffbeb;
+    border-left-color: #f59e0b;
+  }
+  .highlight-alert {
+    background-color: #fef2f2;
+    border-left-color: #ef4444;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 14px 0;
+    font-size: 9pt;
+  }
+  th, td {
+    padding: 8px 10px;
+    border: 1px solid #cbd5e1;
+    text-align: left;
+  }
+  th {
+    background-color: #f1f5f9;
+    color: #0f172a;
+    font-weight: 700;
+  }
+  tr:nth-child(even) {
+    background-color: #f8fafc;
+  }
+  .card-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin: 14px 0;
+  }
+  .card {
+    border: 1.5px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 12px;
+    background: #ffffff;
+  }
+  .card-title {
+    font-weight: 700;
+    color: #065f46;
+    margin-bottom: 6px;
+    font-size: 10.5pt;
+  }
+  .card p {
+    font-size: 9pt;
+    margin: 0;
+    color: #334155;
+  }
+  .qa-card {
+    background: #ffffff;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin-bottom: 12px;
+    border-left: 4px solid #059669;
+  }
+  .qa-card .question {
+    font-weight: 700;
+    color: #0f172a;
+    margin-bottom: 6px;
+    font-size: 10pt;
+  }
+  .qa-card .answer {
+    color: #334155;
+    font-size: 9.5pt;
+  }
+  ol, ul {
+    margin: 6px 0 12px 22px;
+    padding: 0;
+  }
+  li {
+    margin-bottom: 6px;
+  }
+  .step-pill {
+    display: inline-block;
+    background: #10b981;
+    color: white;
+    border-radius: 50%;
+    width: 20px;
+    height: 20px;
+    text-align: center;
+    font-size: 8.5pt;
+    font-weight: bold;
+    line-height: 20px;
+    margin-right: 6px;
+  }
+</style>
+</head>
+<body>
+
+<!-- TITLE / BANNER -->
+<div class="header-card">
+  <h1>भू-लेखा Studio (BhooLekha Studio)</h1>
+  <div class="subtitle">The Super-Simple Team Guide: How It Works & How to Answer Any Question</div>
+  <div>
+    <span class="tag">Build for Bharat 2026</span>
+    <span class="tag">Problem Statement 1 (Land Records AI)</span>
+    <span class="tag">Zero Jargon Edition</span>
+  </div>
+</div>
+
+<!-- SECTION 1: WHAT IS THIS PROJECT? -->
+<h2>1. What Is This Project? (Explain in 30 Seconds)</h2>
+<p>
+  Imagine you have a <strong>50-year-old, yellowed, torn piece of paper</strong> from 1975 written in handwriting in Telugu or Hindi that proves a farmer owns their family land.
+</p>
+<p>
+  In India today, millions of these papers are rotting in government storage rooms. Normal scanner apps cannot read them, people can't read the handwriting, and corrupt people exploit mistakes. This causes <strong>66% of all court cases in India</strong>!
+</p>
+
+<div class="highlight-box">
+  <strong>What BhooLekha Studio Does:</strong>
+  You take a photo of that messy old paper with your smartphone. Our website restores the photo, reads the handwritten names and land plots using Google's Gemini Vision AI, checks if the land math adds up, locks it with a legal tamper-proof digital stamp, and even calls the farmer's phone to read out their rights in simple Hindi or Telugu!
+</div>
+
+<!-- SECTION 2: THE 5 MAIN SUPERPOWERS -->
+<h2>2. The 5 Main Superpowers We Built</h2>
+
+<div class="card-grid">
+  <div class="card">
+    <div class="card-title">1. The "Photo Restorer" 📸</div>
+    <p>
+      Phone photos are often tilted, dark, or yellowed. Our system automatically straightens the angle and has filters (like Instagram, but for old documents) that make faded ink dark and paper white so it's super easy to read.
+    </p>
+  </div>
+  <div class="card">
+    <div class="card-title">2. The "Smart Reader" 🤖</div>
+    <p>
+      We use Google's Gemini Vision AI. It reads handwritten Hindi and Telugu tables like a human eye. It extracts the Account Number (Khata), Farmer Names (Pattadars), and Land Plots in under 6 seconds!
+    </p>
+  </div>
+  <div class="card">
+    <div class="card-title">3. The "Land Math Checker" 🧮</div>
+    <p>
+      In India, land is measured in weird units like Bigha, Biswa, Acre, and Guntha. Our system converts everything to square meters and checks: <em>Do all the small plots add up to the total land?</em> If even 1 meter is missing, it alerts the officer!
+    </p>
+  </div>
+  <div class="card">
+    <div class="card-title">4. The "No-Lying Guardrail" 🛑</div>
+    <p>
+      If a paper is torn or ink is spilled over a name, <strong>our AI NEVER guesses a fake name</strong>. Under government Rule 31(A), it puts a big red box saying <em>"Torn / Illegible — A Real Officer Must Check This"</em>.
+    </p>
+  </div>
+  <div class="card">
+    <div class="card-title">5. The "Tamper-Proof Stamp" 🔒</div>
+    <p>
+      When an officer clicks "Confirm", the computer locks the record with a cryptographic SHA-256 digital fingerprint (Section 65B of Indian Law). Nobody can bribe someone to change it later in court.
+    </p>
+  </div>
+  <div class="card">
+    <div class="card-title">6. Phone Call for Farmers 📞</div>
+    <p>
+      Most rural farmers don't have laptops. A farmer with a cheap ₹1,000 keypad phone can dial a number, enter their land number, and listen to a friendly voice reading their land ownership in plain everyday language!
+    </p>
+  </div>
+</div>
+
+<div class="page-break"></div>
+
+<!-- SECTION 3: THE TECH STACK IN PLAIN ENGLISH -->
+<h2>3. The Tech Stack (What Tools We Used & Why)</h2>
+
+<table>
+  <thead>
+    <tr>
+      <th>Tool / Tech</th>
+      <th>What is it in simple words?</th>
+      <th>Why did we pick it?</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>React 19 & TypeScript</strong></td>
+      <td>The Website Frontend</td>
+      <td>Builds the split-screen view: original scan on the left, extracted data on the right. TypeScript prevents bugs.</td>
+    </tr>
+    <tr>
+      <td><strong>Vite</strong></td>
+      <td>The Web Server / Bundler</td>
+      <td>Runs the website super fast and has a built-in proxy that connects to the backend without any CORS or SSL errors.</td>
+    </tr>
+    <tr>
+      <td><strong>FastAPI (Python)</strong></td>
+      <td>The Backend Engine</td>
+      <td>A modern Python engine that runs the AI, does the land calculations, and saves records to the database.</td>
+    </tr>
+    <tr>
+      <td><strong>OpenCV</strong></td>
+      <td>The Image Doctor</td>
+      <td>Straightens crooked photos, improves contrast, and shrinks 4MB phone photos to 200KB so uploads don't freeze.</td>
+    </tr>
+    <tr>
+      <td><strong>Google Gemini Vision</strong></td>
+      <td>The Multimodal AI Eyes</td>
+      <td>Reads handwritten Telugu and Hindi from camera photos. Much smarter than normal OCR because it understands tables!</td>
+    </tr>
+    <tr>
+      <td><strong>Dual-Key Failover</strong></td>
+      <td>The Backup Plan</td>
+      <td>We loaded 2 Gemini API keys. If Key 1 hits Google's free 15 requests-per-minute limit, Key 2 takes over instantly!</td>
+    </tr>
+    <tr>
+      <td><strong>SQLite (WAL Mode)</strong></td>
+      <td>The Local Database</td>
+      <td>A reliable database file that saves all land parcels, farmer names, and audit stamps. WAL mode means it never locks or crashes.</td>
+    </tr>
+    <tr>
+      <td><strong>Web Speech API</strong></td>
+      <td>The Voice Speaker</td>
+      <td>Speaks out the land record in simple Hindi audio directly inside the browser with zero lag.</td>
+    </tr>
+  </tbody>
+</table>
+
+<!-- SECTION 4: THE STEP-BY-STEP STORY -->
+<h2>4. The Life of a Land Record (How It Works Step-by-Step)</h2>
+<p>Here is what happens behind the scenes from the moment you click "Upload":</p>
+
+<ol>
+  <li><strong>Upload:</strong> You upload a photo of a land record (e.g., our 1975 Andhra Pradesh Telugu scan).</li>
+  <li><strong>Clean & Shrink:</strong> OpenCV straightens any tilt, enhances the text, and shrinks the image so it uploads in 1 second.</li>
+  <li><strong>Gemini Reads:</strong> Google Gemini Vision looks at the photo and extracts the Khata (706), Pattadars (farmers), and plot sizes.</li>
+  <li><strong>Script Fixer:</strong> Our code stitches broken Indian letters and throws away court notices or case numbers so only real owner names remain.</li>
+  <li><strong>The Math Check:</strong> The math engine adds $4.00\text{ Acres} + 4.33\text{ Acres} = 8.33\text{ Acres}$. It checks: <em>Does this match the total? YES!</em></li>
+  <li><strong>Safety Check:</strong> If any word was smudged, it draws a red box so an officer reviews it physically.</li>
+  <li><strong>Database Save:</strong> Everything is saved to our local SQLite database.</li>
+  <li><strong>Officer Approval:</strong> The officer clicks "Approve & Seal", confetti flies 🎉, and a legal digital hash stamp is created!</li>
+  <li><strong>Farmer Audio:</strong> The farmer clicks "सरल व्याख्या" (Simple Explainer) and listens to the result in spoken audio.</li>
+</ol>
+
+<div class="page-break"></div>
+
+<!-- SECTION 5: QUESTIONS JUDGES WILL ASK & WHAT TO SAY -->
+<h2>5. How to Answer Any Judge's Question (Team Cheat Sheet)</h2>
+
+<div class="qa-card">
+  <div class="question">Judges Ask: "Why didn't you just use normal OCR like Tesseract or Google Lens?"</div>
+  <div class="answer">
+    <strong>What to Say:</strong> "Normal OCR engines like Tesseract only look at one letter at a time. On 50-year-old degraded paper with ink stains and handwritten Telugu or Hindi, they fail completely. More importantly, normal OCR doesn't understand tables — it just gives you a messy block of text. We used <strong>Google Gemini Multimodal Vision</strong> because it sees the whole layout at once. It knows which column is the owner's name and which is the plot size, and extracts it in under 6 seconds."
+  </div>
+</div>
+
+<div class="qa-card">
+  <div class="question">Judges Ask: "What if the AI makes a mistake or invents a fake name (hallucination)?"</div>
+  <div class="answer">
+    <strong>What to Say:</strong> "We built our system under strict government guidelines called <strong>Rule 31(A)</strong>. Our AI is strictly assistive — it <em>never</em> declares property title by itself. If any part of the paper is torn or stained with ink, our prompt strictly forces the AI to output an 'Illegible' tag. Our system marks that spot with a bright red warning box saying <em>'Manual Officer Review Required'</em>. A human revenue officer must always verify the record against physical record rooms."
+  </div>
+</div>
+
+<div class="qa-card">
+  <div class="question">Judges Ask: "How do you handle different land units like Bigha, Biswa, Acre, and Guntha?"</div>
+  <div class="answer">
+    <strong>What to Say:</strong> "India has no single land unit. In UP, people use Bigha and Biswa. In Andhra and Telangana, they use Acres and Cents. In Maharashtra, they use Guntha. We built a custom <strong>Revenue Math Engine</strong> that knows the exact conversion for every state into standard square meters. It also adds up all the smaller plots to check if they match the total holding size. If someone made a typo or tried to steal land, our system flags it immediately."
+  </div>
+</div>
+
+<div class="qa-card">
+  <div class="question">Judges Ask: "What if Google's API gets rate-limited or the internet goes down?"</div>
+  <div class="answer">
+    <strong>What to Say:</strong> "We built a <strong>Dual-Key Failover System</strong>. We have two separate API keys. If Key 1 hits Google's free 15 requests-per-minute limit, Key 2 takes over automatically in the background. And if the internet is completely down, our database (SQLite in WAL mode) stores everything locally so the officer can keep working offline."
+  </div>
+</div>
+
+<div class="qa-card">
+  <div class="question">Judges Ask: "How does a poor farmer without a smartphone or internet use this?"</div>
+  <div class="answer">
+    <strong>What to Say:</strong> "We built two solutions: First, our <strong>'Saral Vyakhya'</strong> converts scary legal words into simple everyday language that can be listened to via spoken audio. Second, we built a <strong>2G Phone Call feature</strong>: a farmer with a basic ₹1,000 keypad phone can dial a toll-free number, enter their land number on the keypad, and hear their land details spoken to them in their local language!"
+  </div>
+</div>
+
+<!-- SECTION 6: THE 2-MINUTE STAGE DEMO -->
+<h2>6. The 2-Minute Stage Demo (What to Do When Presenting)</h2>
+<ol>
+  <li><strong>Tell the Story (20s):</strong> "Judges, 2 out of 3 court cases in India are land disputes because old records are decaying. Here is BhooLekha Studio."</li>
+  <li><strong>Show the Upload (30s):</strong> Click <em>'Ingest New Scan'</em> $\rightarrow$ Click <em>'📜 Try Sample: AP 1975 Telugu Adangal'</em> $\rightarrow$ Click <em>'Start AI Ingestion'</em>. In 5 seconds, show the real Telugu owners (<code>మర్రెడ్డి సత్యనారాయణ రెడ్డి</code>) and plots appear on screen!</li>
+  <li><strong>Show the Math & Safety (30s):</strong> Show that $4.00 + 4.33 = 8.33\text{ Acres}$. Point to the red box: "Notice this red box: under Rule 31(A), our AI never guesses smudged text; it flags it for human review."</li>
+  <li><strong>Click Approve & Play Audio (30s):</strong> Click <em>'Approve & Digitally Seal'</em> (confetti flies 🎉) $\rightarrow$ Show the legal SHA-256 seal $\rightarrow$ Switch to <em>'सरल व्याख्या'</em> tab and click <em>'बोलकर सुनाएं'</em> to play the audio explainer.</li>
+  <li><strong>Close (10s):</strong> "BhooLekha Studio turns decaying paper into verified, citizen-first digital India. Thank you!"</li>
+</ol>
+
+</body>
+</html>

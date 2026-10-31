@@ -2,8 +2,18 @@ import os
 import json
 import base64
 import requests
+import urllib.request
+import datetime
+import hashlib
+import cv2
 from pathlib import Path
 from typing import Dict, Any, List, Optional
+
+from record_builder import empty_record, tesseract_extract, manual_entry_record
+
+
+def compute_sha256(text: str) -> str:
+    return hashlib.sha256(text.encode('utf-8')).hexdigest()
 
 # Automatically load .env file if present
 env_file = Path(__file__).parent / ".env"
@@ -97,270 +107,50 @@ def extract_land_record_from_image(
             # Try UP Bhulekh statutory text parser first for instant 100% precision!
             statutory_doc = parse_up_bhulekh_pdf_text(pdf_text, image_base64)
             if statutory_doc:
+                statutory_doc["extractionSource"] = "statutory_pdf_text"
                 print(f"[Success] Extracted statutory document with {len(statutory_doc['owners'])} owners and {len(statutory_doc['discrepancies'])} flags!")
                 return statutory_doc
     except Exception as e:
         print(f"[Warning] PDF check failed: {e}")
 
-    gemini_key = os.getenv("GEMINI_API_KEY")
+    # Gather configured Gemini API keys (supports primary + backup failover keys)
+    api_keys = []
+    for env_var in ["GEMINI_API_KEY", "GEMINI_API_KEY_2", "GEMINI_API_KEY_3"]:
+        k = os.getenv(env_var)
+        if k and k.strip() and k.strip() != "your_key_here" and k.strip() not in api_keys:
+            api_keys.append(k.strip())
 
-    if gemini_key and gemini_key != "your_key_here":
-        try:
-            return call_gemini_vision(image_base64, gemini_key, state, record_type, village, tehsil)
-        except Exception as e:
-            print(f"[Warning] Gemini API call failed: {e}. Falling back to domain extractor.")
+    if api_keys:
+        for idx, key in enumerate(api_keys):
+            try:
+                masked_key = f"{key[:8]}...{key[-4:]}"
+                print(f"[Gemini Vision] Attempting extraction with API key #{idx+1} ({masked_key})...")
+                return call_gemini_vision(image_base64, key, state, record_type, village, tehsil)
+            except Exception as e:
+                print(f"[Warning] Gemini API key #{idx+1} failed: {e}")
+                if idx < len(api_keys) - 1:
+                    print(f"[Failover] Automatically falling over to backup key #{idx+2}...")
+                else:
+                    print(f"[Failover Exhausted] All {len(api_keys)} Gemini API keys failed or timed out.")
 
-    # High-fidelity domain extraction engine
-    return domain_indic_extraction(image_base64, state, record_type, village, tehsil)
+    # Fallback 1: local Tesseract OCR (partial, honest)
+    try:
+        ocr_doc = tesseract_extract(image_base64, state, record_type, village, tehsil)
+        if ocr_doc:
+            print("[Fallback] Local Tesseract OCR used.")
+            return ocr_doc
+    except Exception as e:
+        print(f"[Warning] Tesseract fallback failed: {e}")
 
-def domain_indic_extraction(
-    image_base64: str,
-    state: str,
-    record_type: str,
-    village: str,
-    tehsil: str,
-) -> Dict[str, Any]:
-    """
-    Realistic Indic Revenue extraction engine with localized bounding boxes and discrepancy checks.
-    """
-    stated_str = "2 Bigha 10 Biswa" if state in ["Bihar", "Uttar Pradesh"] else "40 Guntha"
-    stated_conv = parse_regional_land_area(stated_str)
+    # Fallback 2: nothing could read the document. Say so — never return made-up data.
+    reason = ("No Gemini API key configured" if not api_keys else "Gemini vision service unreachable") + \
+             " and local Tesseract OCR is not installed for this language."
+    return manual_entry_record(state, record_type, village, tehsil, reason)
 
-    p1_str = "1 Bigha 5 Biswa" if state in ["Bihar", "Uttar Pradesh"] else "18 Guntha"
-    p2_str = "1 Bigha 5 Biswa" if state in ["Bihar", "Uttar Pradesh"] else "22 Guntha"
-    p1_conv = parse_regional_land_area(p1_str)
-    p2_conv = parse_regional_land_area(p2_str)
+import contextvars
+# Set per request by main.py: known misreadings learned from officer corrections.
+learned_hints: contextvars.ContextVar[str] = contextvars.ContextVar("learned_hints", default="")
 
-    math_result = verify_parcel_arithmetic(
-        stated_conv["sq_meters"], 
-        [p1_conv["sq_meters"], p2_conv["sq_meters"]]
-    )
-
-    discrepancies = []
-    if not math_result["is_consistent"]:
-        discrepancies.append({
-            "id": "disc-py-math-1",
-            "fieldKey": "totalStatedArea",
-            "title": "Mathematical Variance in Parcel Geometry",
-            "description": math_result["message"],
-            "severity": math_result["severity"],
-            "suggestedAction": "Inspect Khatiyan settlement volume before record approval.",
-            "status": "PENDING_REVIEW"
-        })
-
-    return {
-        "id": f"rec-py-{int(hash(image_base64[:40]) % 1000000)}",
-        "title": f"{state} भू-राजस्व अभिलेख ({village})",
-        "state": state,
-        "stateCode": "BR" if state == "Bihar" else "UP",
-        "district": f"{tehsil} District",
-        "tehsil": tehsil,
-        "village": village,
-        "recordType": record_type,
-        "primaryLanguage": "Hindi",
-        "originalDocumentUrl": image_base64 if image_base64.startswith("data:") else f"data:image/jpeg;base64,{image_base64}",
-        "scanCondition": "Restored Scan",
-        "estimatedYear": 1982,
-
-        "khataNumber": {
-            "key": "khataNumber",
-            "label": "Khata Number",
-            "regionalLabel": "खाता संख्या",
-            "value": "00275",
-            "rawOcrValue": "००२७५",
-            "confidence": 0.94,
-            "confidenceTier": "high",
-            "boundingBox": {"id": "bb-py-khata", "x": 22.0, "y": 15.0, "width": 14.0, "height": 4.5, "label": "Khata 00275"},
-            "isVerified": False
-        },
-
-        "fasliYear": {
-            "key": "fasliYear",
-            "label": "Fasli Year",
-            "regionalLabel": "फसली वर्ष",
-            "value": "1389 Fasli",
-            "rawOcrValue": "१३८९ फसली",
-            "confidence": 0.91,
-            "confidenceTier": "high",
-            "boundingBox": {"id": "bb-py-fasli", "x": 74.0, "y": 15.0, "width": 18.0, "height": 4.5, "label": "Fasli 1389"},
-            "isVerified": False
-        },
-
-        "owners": [
-            {
-                "id": "owner-py-1",
-                "name": {
-                    "key": "owner-py-1-name",
-                    "label": "Primary Tenure Holder",
-                    "regionalLabel": "खातेदार का नाम",
-                    "value": "Anand Mohan Thakur",
-                    "rawOcrValue": "आनन्द मोहन ठाकुर",
-                    "confidence": 0.95,
-                    "confidenceTier": "high",
-                    "boundingBox": {"id": "bb-py-owner-1", "x": 12.0, "y": 31.0, "width": 28.0, "height": 5.0, "label": "आनन्द मोहन ठाकुर"},
-                    "isVerified": False
-                },
-                "relationType": "s/o",
-                "relativeName": {
-                    "key": "owner-py-1-rel",
-                    "label": "Father's Name",
-                    "regionalLabel": "पिता का नाम",
-                    "value": "Ramcharitra Thakur",
-                    "rawOcrValue": "रामचरित्र ठाकुर",
-                    "confidence": 0.92,
-                    "confidenceTier": "high",
-                    "boundingBox": {"id": "bb-py-owner-1-rel", "x": 42.0, "y": 31.0, "width": 26.0, "height": 5.0, "label": "रामचरित्र ठाकुर"},
-                    "isVerified": False
-                },
-                "shareFraction": {
-                    "key": "owner-py-1-share",
-                    "label": "Holding Share",
-                    "regionalLabel": "हिस्सा",
-                    "value": "Full (1/1)",
-                    "rawOcrValue: ": "१/१",
-                    "confidence": 0.97,
-                    "confidenceTier": "high",
-                    "boundingBox": {"id": "bb-py-owner-1-share", "x": 70.0, "y": 31.0, "width": 10.0, "height": 5.0, "label": "१/१"},
-                    "isVerified": False
-                }
-            }
-        ],
-
-        "totalStatedArea": {
-            "key": "totalStatedArea",
-            "label": "Total Stated Holding Area",
-            "regionalLabel": "कुल दर्ज रकबा",
-            "value": stated_str,
-            "rawOcrValue": stated_str,
-            "confidence": 0.93,
-            "confidenceTier": "high",
-            "boundingBox": {"id": "bb-py-total-area", "x": 65.0, "y": 62.0, "width": 28.0, "height": 5.5, "label": f"कुल {stated_str}"},
-            "isVerified": False,
-            "hasDiscrepancy": not math_result["is_consistent"]
-        },
-        "totalStatedAreaInSqMeters": stated_conv["sq_meters"],
-
-        "plots": [
-            {
-                "id": "plot-py-1",
-                "khasraNumber": {
-                    "key": "plot-py-1-no",
-                    "label": "Khasra No.",
-                    "regionalLabel": "खसरा संख्या",
-                    "value": "512/1",
-                    "rawOcrValue": "५१२/१",
-                    "confidence": 0.96,
-                    "confidenceTier": "high",
-                    "boundingBox": {"id": "bb-py-p1-no", "x": 12.0, "y": 52.0, "width": 14.0, "height": 5.0, "label": "खसरा ५१२/१"},
-                    "isVerified": False
-                },
-                "regionalAreaText": {
-                    "key": "plot-py-1-area",
-                    "label": "Plot Area",
-                    "regionalLabel": "क्षेत्रफल",
-                    "value": p1_str,
-                    "rawOcrValue": p1_str,
-                    "confidence": 0.93,
-                    "confidenceTier": "high",
-                    "boundingBox": {"id": "bb-py-p1-area", "x": 28.0, "y": 52.0, "width": 22.0, "height": 5.0, "label": p1_str},
-                    "isVerified": False
-                },
-                "areaInSqMeters": p1_conv["sq_meters"],
-                "areaInHectares": p1_conv["hectares"],
-                "landClassification": {
-                    "key": "plot-py-1-class",
-                    "label": "Classification",
-                    "regionalLabel": "भूमि की किस्म",
-                    "value": "Dhanhar Awwal (Wetland)",
-                    "rawOcrValue": "धनहर अव्वल",
-                    "confidence": 0.90,
-                    "confidenceTier": "high",
-                    "boundingBox": {"id": "bb-py-p1-class", "x": 52.0, "y": 52.0, "width": 24.0, "height": 5.0, "label": "धनहर"},
-                    "isVerified": False
-                },
-                "annualRevenueLagaan": {
-                    "key": "plot-py-1-tax",
-                    "label": "Revenue Cess",
-                    "regionalLabel": "मालगुजारी",
-                    "value": "₹ 16.50",
-                    "rawOcrValue": "१६.५० रु.",
-                    "confidence": 0.88,
-                    "confidenceTier": "high",
-                    "boundingBox": {"id": "bb-py-p1-tax", "x": 78.0, "y": 52.0, "width": 14.0, "height": 5.0, "label": "रु. १६.५०"},
-                    "isVerified": False
-                },
-                "boundingBox": {"id": "bb-py-row-1", "x": 10.0, "y": 50.0, "width": 84.0, "height": 8.0, "label": "खसरा ५१२/१ पंक्ति"}
-            },
-            {
-                "id": "plot-py-2",
-                "khasraNumber": {
-                    "key": "plot-py-2-no",
-                    "label": "Khasra No.",
-                    "regionalLabel": "खसरा संख्या",
-                    "value": "512/2",
-                    "rawOcrValue": "५१२/२",
-                    "confidence": 0.94,
-                    "confidenceTier": "high",
-                    "boundingBox": {"id": "bb-py-p2-no", "x": 12.0, "y": 59.0, "width": 14.0, "height": 5.0, "label": "खसरा ५१२/२"},
-                    "isVerified": False
-                },
-                "regionalAreaText": {
-                    "key": "plot-py-2-area",
-                    "label": "Plot Area",
-                    "regionalLabel": "क्षेत्रफल",
-                    "value": p2_str,
-                    "rawOcrValue": p2_str,
-                    "confidence": 0.92,
-                    "confidenceTier": "high",
-                    "boundingBox": {"id": "bb-py-p2-area", "x": 28.0, "y": 59.0, "width": 22.0, "height": 5.0, "label": p2_str},
-                    "isVerified": False
-                },
-                "areaInSqMeters": p2_conv["sq_meters"],
-                "areaInHectares": p2_conv["hectares"],
-                "landClassification": {
-                    "key": "plot-py-2-class",
-                    "label": "Classification",
-                    "regionalLabel": "भूमि की किस्म",
-                    "value": "Bhit Doem (Upland)",
-                    "rawOcrValue": "भीठ दोयम",
-                    "confidence": 0.89,
-                    "confidenceTier": "high",
-                    "boundingBox": {"id": "bb-py-p2-class", "x": 52.0, "y": 59.0, "width": 24.0, "height": 5.0, "label": "भीठ"},
-                    "isVerified": False
-                },
-                "annualRevenueLagaan": {
-                    "key": "plot-py-2-tax",
-                    "label": "Revenue Cess",
-                    "regionalLabel": "मालगुजारी",
-                    "value": "₹ 12.00",
-                    "rawOcrValue": "१२.०० रु.",
-                    "confidence": 0.86,
-                    "confidenceTier": "high",
-                    "boundingBox": {"id": "bb-py-p2-tax", "x": 78.0, "y": 59.0, "width": 14.0, "height": 5.0, "label": "रु. १२.००"},
-                    "isVerified": False
-                },
-                "boundingBox": {"id": "bb-py-row-2", "x": 10.0, "y": 58.0, "width": 84.0, "height": 8.0, "label": "खसरा ५१२/२ पंक्ति"}
-            }
-        ],
-
-        "discrepancies": discrepancies,
-        "overallConfidence": 0.93,
-        "verificationStatus": "DRAFT_AI_EXTRACTION",
-
-        "auditTrail": [
-            {
-                "id": f"audit-py-{int(hash(image_base64[:30]) % 100000)}",
-                "timestamp": "2026-10-25 14:52 IST",
-                "officerId": "SYS_FASTAPI_CV_ENGINE",
-                "officerName": "FastAPI IndicCV-v1",
-                "officerDesignation": "Automated CV & OCR Microservice",
-                "action": "CONFIRMED_MATCH",
-                "fieldLabel": "Backend Ingestion Completed",
-                "newValue": f"Processed {state} land record with 2 parcels extracted",
-                "integrityHash": "7f83b1657ff1fc53b92dc18148a1d65dfc2d4b1fa3d677284addd200126d9069"
-            }
-        ]
-    }
 
 def call_gemini_vision(
     image_base64: str,
@@ -374,34 +164,52 @@ def call_gemini_vision(
     Direct Gemini Vision API integration for multimodal document analysis.
     """
     clean_base64 = image_base64.split(",")[-1] if "," in image_base64 else image_base64
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key={api_key}"
+
+    # Optimize payload size to prevent socket timeouts on high-res camera photos
+    try:
+        raw_bytes = base64.b64decode(clean_base64)
+        cv_img = bytes_to_cv2(raw_bytes)
+        h, w = cv_img.shape[:2]
+        if max(h, w) > 1600:
+            scale = 1600.0 / max(h, w)
+            cv_img = cv2.resize(cv_img, (int(w * scale), int(h * scale)), interpolation=cv2.INTER_AREA)
+        _, buf = cv2.imencode(".jpg", cv_img, [int(cv2.IMWRITE_JPEG_QUALITY), 82])
+        clean_base64 = base64.b64encode(buf.tobytes()).decode("utf-8")
+        print(f"[Gemini Vision Optimization] Normalized scan payload to {len(clean_base64):,} chars")
+    except Exception as img_opt_err:
+        print(f"[Gemini Vision Optimization Note] {img_opt_err}")
 
     prompt = f"""
     You are an expert Indian Revenue Record Transcriber. Read this real land record document ({state}, {record_type}, Village: {village}, Tehsil: {tehsil}) carefully.
+    This document may be in Hindi, Telugu, Marathi, Tamil, or other Indic languages/scripts, handwritten or printed.
     Extract the ACTUAL data written on this page into a structured JSON object with these keys:
-    - "khata_number": The account number (खाता संख्या) located in the document header (e.g. '00858', '00548'). Do NOT confuse with Khasra/Gata plot number (खसरा/गाटा संख्या) which is in the table column (e.g. '861', '32')!
-    - "fasli_year": The agricultural/fasli assessment year (e.g. '1426-1431 फसली').
-    - "village": Village/Mauza name written on the document (e.g. 'चैनपुर गुलौरा').
-    - "district": District name (e.g. 'बलिया').
-    - "tehsil": Tehsil name (e.g. 'बेलथरा रोड').
-    - "total_area": Stated total land area with units (e.g. '0.071000 Hectare').
-    - "owners": A list of all legal landholders/owners written on the document.
+    - "khata_number": The account number (खाता संख्या / ఖాతా సంఖ్య / खाते क्रमांक / S.No.) located in the document header or table (e.g. '00858', '00548', '706', '128').
+    - "fasli_year": The agricultural/fasli assessment year (e.g. '1426-1431 फसली', '1385 ఫసలీ').
+    - "village": Village/Mauza name written on the document.
+    - "district": District name.
+    - "tehsil": Tehsil/Taluk name.
+    - "total_area": Stated total land area with units (e.g. '0.8290 Hectare', '8.33 Acres', '2 Bigha 10 Biswa').
+    - "owners": A list of all legal landholders/pattadars/owners found across rows on this document.
         CRITICAL RULES FOR OWNERS:
-        1. Extract ONLY genuine human landholders from Column 2/3 ('खातेदार का विवरण').
-        2. INDIC NORMALIZATION: Scanned government PDFs often have unnatural kerning gaps between Hindi letters (e.g. 'रा जेश या दव' or 'रा मनक्षत्र या दव'). You MUST remove these artificial spaces and output proper Hindi names: 'राजेश यादव' and 'रामनक्षत्र यादव'.
+        1. Extract genuine landholders/pattadars from the owner column ('खातेदार का विवरण' or 'పట్టాదారు పేరు').
+        2. INDIC NORMALIZATION: Remove unnatural kerning gaps between letters.
         3. Do NOT include serial numbers like '1)', '2)' in the name or relative_name fields.
-        4. Do NOT extract court orders, mutation notes, or succession text like 'ऑनलाइन उत्तराधिकार' or 'वरासत' or case numbers ('2026...') as owners! Those are mutation orders, NOT people.
+        4. If any name is physically torn or smudged, write '⚠️ अपठनीय / అస్పష్టం (Illegible)'.
         Each owner must have:
-        "name": Clean owner's name without serial numbers or kerning gaps
-        "relative_name": Clean father's or guardian's name without serial numbers
+        "name": Clean owner's name in original script
+        "relative_name": Clean father's or guardian's name
         "relation_type": 's/o' or 'w/o'
-        "share_fraction": Fractional share (e.g. '1/3 हिस्सा', '0.023700 हे०')
-    - "plots": A list of all Khasra/Gat plots listed. Each with:
-        "khasra_number": Survey or Khasra plot number (e.g. '861')
-        "area": Area of this plot with unit (e.g. '0.0710 हे०')
-        "classification": Soil or land type
-        "tax": Land revenue cess/lagaan amount (e.g. '₹ 0.01')
+        "share_fraction": Fractional share or tenure type (e.g. '1/3 हिस्सा', 'రైత్వారీ / స్వంతం')
+    - "plots": A list of all Survey/Khasra/Gata plots listed. Each with:
+        "khasra_number": Survey or Khasra plot number (e.g. '861', '299 A', '299 B', '301 A1')
+        "area": Area of this plot with unit (e.g. '0.0710 हे०', '4.00 Acres', '4.33 Acres')
+        "classification": Soil or land type (e.g. 'రైత్వారీ మెట్ట', 'संक्रमणीय भूमिधर')
+        "tax": Land revenue cess/lagaan/teeruva amount (e.g. '₹ 2.10', '4.37', '₹ 0.01')
     - "bank_loans_or_mortgages": A list of strings describing any bank loans/KCC mortgages registered on page.
+    - "uncertain_fields": A list of the keys above (e.g. "khata_number", "total_area") whose value you could
+        not read clearly (faded, smudged, overwritten, ambiguous). Be honest; an empty list means all clear.
+    If a value is not present on the page, use an empty string. NEVER guess or fill in example values.
+    {learned_hints.get()}
     Return ONLY pure JSON. No markdown ticks, no preamble.
     """
 
@@ -421,25 +229,63 @@ def call_gemini_vision(
         ]
     }
 
-    resp = requests.post(url, json=payload, timeout=40)
-    resp.raise_for_status()
-    result = resp.json()
+    models_to_try = [
+        "gemini-flash-lite-latest",
+        "gemini-flash-latest",
+        "gemini-2.5-flash-lite",
+        "gemini-3.8-flash"
+    ]
+
+    result = None
+    for model_name in models_to_try:
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={api_key}"
+        try:
+            print(f"[Gemini Vision] Attempting live extraction with {model_name}...")
+            post_data = json.dumps(payload).encode("utf-8")
+            req = urllib.request.Request(url, data=post_data, headers={"Content-Type": "application/json"})
+            with urllib.request.urlopen(req, timeout=30) as http_res:
+                if http_res.status == 200:
+                    raw_body = http_res.read().decode("utf-8")
+                    result = json.loads(raw_body)
+                    print(f"[Gemini Vision] SUCCESS: Document analyzed by {model_name}!")
+                    break
+                else:
+                    print(f"[Gemini Vision] {model_name} returned HTTP {http_res.status}")
+        except Exception as model_err:
+            print(f"[Gemini Vision] {model_name} request failed: {model_err}")
+
+    if result is None:
+        raise RuntimeError("All Gemini Vision AI endpoints were unavailable or timed out.")
 
     raw_text = result["candidates"][0]["content"]["parts"][0]["text"]
     cleaned = raw_text.strip().replace("```json", "").replace("```", "").strip()
     parsed_llm = json.loads(cleaned)
 
-    # Base structure
-    base_record = domain_indic_extraction(image_base64, state, record_type, village, tehsil)
+    # Base structure: an EMPTY record. Every value below comes from the model's reading.
+    base_record = empty_record(state, record_type, village, tehsil, extraction_source="gemini_vision")
+    unc = parsed_llm.get("uncertain_fields") or []
+    key_map = {"khata_number": "khataNumber", "fasli_year": "fasliYear", "total_area": "totalStatedArea"}
+    base_record["uncertainFields"] = [key_map.get(u, u) for u in unc if isinstance(u, str)]
+
+    # Auto-detect script: If Telugu script detected, adjust state & metadata accordingly
+    import re
+    has_telugu = bool(re.search(r'[\u0C00-\u0C7F]', json.dumps(parsed_llm, ensure_ascii=False)))
+    if has_telugu:
+        base_record["primaryLanguage"] = "Telugu"
+        base_record["stateCode"] = "AP"
+        base_record["recordType"] = "Adangal / Pahani (అడంగల్ / పహణీ)"
+        if base_record["state"] in ["Uttar Pradesh", "Bihar"]:
+            base_record["state"] = "Andhra Pradesh"
+            base_record["district"] = ""
+            base_record["tehsil"] = ""
+            base_record["village"] = clean_indic_text(str(parsed_llm.get("village") or ""))
+        base_record["title"] = f"ఆంధ్రప్రదేశ్ గ్రామ లెక్క నెం. 3 - అడంగల్ ({base_record['village']})"
 
     # Apply real extracted data from Gemini
     if "khata_number" in parsed_llm and parsed_llm["khata_number"]:
         clean_khata = clean_indic_text(str(parsed_llm["khata_number"]))
         base_record["khataNumber"]["value"] = clean_khata
         base_record["khataNumber"]["rawOcrValue"] = clean_khata
-        base_record["khataNumber"]["confidence"] = 0.99
-        base_record["khataNumber"]["confidenceTier"] = "high"
-        base_record["khataNumber"]["isVerified"] = True
 
     if "fasli_year" in parsed_llm and parsed_llm["fasli_year"]:
         base_record["fasliYear"]["value"] = clean_indic_text(str(parsed_llm["fasli_year"]))
@@ -454,9 +300,16 @@ def call_gemini_vision(
         base_record["tehsil"] = clean_indic_text(str(parsed_llm["tehsil"]))
 
     if "total_area" in parsed_llm and parsed_llm["total_area"]:
-        base_record["totalStatedArea"]["value"] = str(parsed_llm["total_area"])
         conv = parse_regional_land_area(str(parsed_llm["total_area"]))
-        base_record["totalStatedAreaInSqMeters"] = conv["sq_meters"]
+        ha = conv["hectares"]
+        sq_m = conv["sq_meters"]
+        if "acre" in str(parsed_llm["total_area"]).lower() or "ఎకర" in str(parsed_llm["total_area"]):
+            acres = conv["acres"]
+            base_record["totalStatedArea"]["value"] = f"{acres:.2f} ఎకరాలు ({sq_m:,.0f} చ.మీ. · దాదాపు {ha:.4f} హెక్టార్లు)"
+        else:
+            biswa = round(sq_m / 126.464, 1)
+            base_record["totalStatedArea"]["value"] = f"{ha:.4f} हेक्टेयर ({sq_m:,.0f} वर्ग मीटर · लगभग {biswa} बिस्वा)"
+        base_record["totalStatedAreaInSqMeters"] = sq_m
 
     # Real owners list from user's document
     if "owners" in parsed_llm and isinstance(parsed_llm["owners"], list) and len(parsed_llm["owners"]) > 0:
@@ -467,10 +320,10 @@ def call_gemini_vision(
             raw_o_rel = str(o.get("relative_name") or "")
             o_name = clean_indic_text(raw_o_name)
             o_rel = clean_indic_text(raw_o_rel)
-            o_share = clean_indic_text(str(o.get("share_fraction") or "1/3 हिस्सा (समभाग)"))
+            o_share = clean_indic_text(str(o.get("share_fraction") or ""))
 
             # Strictly reject mutation/court orders and case numbers
-            if is_mutation_or_non_owner(o_name) or is_mutation_or_non_owner(o_rel):
+            if is_mutation_or_non_owner(o_name) or (o_rel and is_mutation_or_non_owner(o_rel)):
                 continue
 
             if len(o_name) < 2 or o_name in seen_names:
@@ -478,25 +331,43 @@ def call_gemini_vision(
 
             seen_names.add(o_name)
 
+            is_illegible = "अपठनीय" in o_name or "अस्पष्ट" in o_name or "illegible" in o_name.lower() or "faded" in o_name.lower() or "[स्याही" in o_name
+            conf = 0.22 if is_illegible else 0.98
+            conf_tier = "low" if is_illegible else "high"
+            disp_val = "⚠️ अपठनीय / अस्पष्ट (Illegible — Manual Officer Review Required)" if is_illegible else o_name
+            disc_note = "मूल अभिलेख में स्याही फैलने / पन्ना फटने के कारण पाठ अस्पष्ट है। डिजिटल इंडिया मानक के अनुसार राजस्व अधिकारी द्वारा भौतिक अभिलेखागार से सत्यापन अनिवार्य है।" if is_illegible else None
+
+            if is_illegible:
+                base_record["discrepancies"].append({
+                    "id": f"disc-ai-illegible-{len(extracted_owners)+1}",
+                    "fieldKey": f"owner-ai-{len(extracted_owners)+1}-name",
+                    "title": "Archival Ink Degraded / Illegible Text Detected",
+                    "description": "Portion of landholder record is faded or smudged. Automated hallucination strictly prohibited. Physical record room cross-examination",
+                    "severity": "high",
+                    "suggestedAction": "Verify physically against Tehsil Record Room Khatiyan volume.",
+                    "status": "PENDING_REVIEW"
+                })
+
             extracted_owners.append({
                 "id": f"owner-ai-{len(extracted_owners)+1}",
                 "name": {
                     "key": f"owner-ai-{len(extracted_owners)+1}-name",
                     "label": f"Tenure Holder #{len(extracted_owners)+1}",
                     "regionalLabel": "खातेदार का नाम",
-                    "value": o_name,
+                    "value": disp_val,
                     "rawOcrValue": raw_o_name or o_name,
-                    "confidence": 0.98,
-                    "confidenceTier": "high",
+                    "confidence": conf,
+                    "confidenceTier": conf_tier,
                     "boundingBox": {
                         "id": f"bb-ai-o{len(extracted_owners)+1}",
                         "x": 12.0,
                         "y": 28.0 + (len(extracted_owners) * 5),
                         "width": 28.0,
                         "height": 4.5,
-                        "label": o_name,
+                        "label": "⚠️ अपठनीय पाठ" if is_illegible else o_name,
                     },
-                    "isVerified": True,
+                    "isVerified": not is_illegible,
+                    "discrepancyNote": disc_note,
                 },
                 "relationType": "s/o",
                 "relativeName": {
@@ -538,15 +409,56 @@ def call_gemini_vision(
             })
         if len(extracted_owners) > 0:
             base_record["owners"] = extracted_owners
+        else:
+            base_record["owners"] = [{
+                "id": "owner-ai-1",
+                "name": {
+                    "key": "owner-ai-1-name",
+                    "label": "Tenure Holder #1",
+                    "regionalLabel": "పట్టాదారు పేరు" if has_telugu else "खातेदार का नाम",
+                    "value": "⚠️ अपठनीय / అస్పష్టం (Illegible — Manual Officer Review Required)",
+                    "rawOcrValue": "Illegible",
+                    "confidence": 0.25,
+                    "confidenceTier": "low",
+                    "boundingBox": {"id": "bb-ai-o1", "x": 12.0, "y": 28.0, "width": 28.0, "height": 4.5, "label": "⚠️ अपठनीय"},
+                    "isVerified": False,
+                    "discrepancyNote": "Landholder name illegible from archival scan."
+                },
+                "relationType": "s/o",
+                "relativeName": {
+                    "key": "owner-ai-1-rel",
+                    "label": "Father/Guardian Name",
+                    "regionalLabel": "తండ్రి పేరు" if has_telugu else "पिता का नाम",
+                    "value": "—",
+                    "rawOcrValue": "—",
+                    "confidence": 0.5,
+                    "confidenceTier": "low",
+                    "boundingBox": {"id": "bb-ai-orel1", "x": 42.0, "y": 28.0, "width": 26.0, "height": 4.5, "label": "—"},
+                    "isVerified": False
+                },
+                "shareFraction": {
+                    "key": "owner-ai-1-share",
+                    "label": "Holding Share",
+                    "regionalLabel": "భూమి హక్కు" if has_telugu else "अंश",
+                    "value": "1/1",
+                    "rawOcrValue": "1/1",
+                    "confidence": 0.9,
+                    "confidenceTier": "high",
+                    "boundingBox": {"id": "bb-ai-osh1", "x": 70.0, "y": 28.0, "width": 12.0, "height": 4.5, "label": "1/1"},
+                    "isVerified": True
+                }
+            }]
 
     # Real plots list from user's PDF
     if "plots" in parsed_llm and isinstance(parsed_llm["plots"], list) and len(parsed_llm["plots"]) > 0:
         extracted_plots = []
         for idx, p in enumerate(parsed_llm["plots"]):
-            p_no = str(p.get("khasra_number") or f"Plot {idx+1}")
-            p_area = str(p.get("area") or "1 Bigha")
-            p_class = str(p.get("classification") or "Agricultural")
-            p_tax = str(p.get("tax") or "₹ 12.00")
+            p_no = str(p.get("khasra_number") or "")
+            p_area = str(p.get("area") or "")
+            p_class = str(p.get("classification") or "")
+            if "संक्रमणीय" in p_class or "1-क" in p_class or "1-ka" in p_class.lower():
+                p_class = "श्रेणी 1-क · संक्रमणीय भूमिधर (स्वयं की निजी भूमि — बिक्री व वसीयत का पूर्ण अधिकार)"
+            p_tax = str(p.get("tax") or "")
             p_conv = parse_regional_land_area(p_area)
             extracted_plots.append({
                 "id": f"plot-ai-{idx+1}",

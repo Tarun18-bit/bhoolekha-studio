@@ -23,7 +23,7 @@ export interface ExtractedField<T = string> {
   verifiedBy?: string;
   verifiedAt?: string;
   hasDiscrepancy?: boolean;
-  discrepancyNote?: string;
+  discrepancyNote?: string | null;
 }
 
 export interface OwnerRecord {
@@ -32,6 +32,10 @@ export interface OwnerRecord {
   relationType: 's/o' | 'w/o' | 'd/o' | 'c/o' | 'h/o';
   relativeName: ExtractedField<string>;
   shareFraction: ExtractedField<string>; // e.g. "1/2", "33.3%"
+  individualHa?: number;
+  individualSqM?: number;
+  individualBiswa?: number;
+  mobileNumber?: string | null;
   aadhaarVaultToken?: string; // Privacy compliant token
 }
 
@@ -43,6 +47,8 @@ export interface SubplotParcel {
   areaInHectares: number;
   landClassification: ExtractedField<string>; // e.g. "Chahi (Irrigated)", "Barani (Rainfed)"
   annualRevenueLagaan: ExtractedField<string>; // Revenue tax cess
+  chauhaddi?: any;
+  hasRoadAccess?: boolean;
   boundingBox: BoundingBox;
 }
 
@@ -62,7 +68,7 @@ export interface AuditLogEntry {
   officerId: string;
   officerName: string;
   officerDesignation: string;
-  action: 'FIELD_EDITED' | 'CONFIRMED_MATCH' | 'DISCREPANCY_OVERRIDDEN' | 'FINAL_DIGITIZATION_SIGN_OFF';
+  action: 'FIELD_EDITED' | 'CONFIRMED_MATCH' | 'DISCREPANCY_OVERRIDDEN' | 'FINAL_DIGITIZATION_SIGN_OFF' | 'ARCHIVAL_INGESTION_SEALED';
   fieldLabel?: string;
   oldValue?: string;
   newValue?: string;
@@ -72,14 +78,16 @@ export interface AuditLogEntry {
 
 export interface LandRecordDocument {
   id: string;
+  ulpin?: string;
   title: string;
   state: string;
   stateCode: string;
   district: string;
   tehsil: string;
   village: string;
-  recordType: 'Khasra-Khatauni' | '7/12 Extract (Saat-Baara)' | 'Jamabandi' | 'Patta/Chitta';
-  primaryLanguage: 'Hindi' | 'Marathi' | 'Tamil' | 'English';
+  lgdCode?: string;
+  recordType: 'Khasra-Khatauni' | '7/12 Extract (Saat-Baara)' | 'Jamabandi' | 'Patta/Chitta' | 'Adangal / Pahani (అడంగల్ / పహణీ)';
+  primaryLanguage: 'Hindi' | 'Marathi' | 'Tamil' | 'Telugu' | 'English';
   originalDocumentUrl: string; // Base64 or SVG / Canvas render template
   scanCondition: 'Faded Handwritten' | 'Torn / Skewed Scan' | 'Archival Blue-Ink' | 'Standard Digital Scan';
   estimatedYear: number;
@@ -103,8 +111,10 @@ export interface LandRecordDocument {
   discrepancies: RevenueDiscrepancy[];
   overallConfidence: number; // e.g. 88%
   verificationStatus: 'DRAFT_AI_EXTRACTION' | 'IN_REVIEW' | 'OFFICER_APPROVED' | 'REJECTED';
-  approvedBy?: string;
-  approvedAt?: string;
+  approvedBy?: string | null;
+  approvedAt?: string | null;
+  boundaryGeoJson?: any;
+  isVerified?: boolean;
 
   // Audit trail
   auditTrail: AuditLogEntry[];

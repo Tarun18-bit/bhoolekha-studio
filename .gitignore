@@ -47,3 +47,24 @@ temp_test/
 *.njsproj
 *.sln
 *.sw?
+
+# Local working copies (not for the repo)
+_backup_*/
+_to_delete/
+
+server/.auth_secret
+
+# uploaded scans (test uploads); files already committed stay tracked
+public/uploads/scan_*
+server/uploads/scan_*
+
+# Real people's data stays local (repo is public)
+server/govt_data/real_sample_*.json
+server/govt_data/*.local.json
+public/uploads/*
+!public/uploads/.gitkeep
+server/uploads/*
+!server/uploads/.gitkeep
+server/bhoolekha.db
+server/bhoolekha.db-*
+server/.auth_secret

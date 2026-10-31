@@ -64,8 +64,8 @@ export const CitizenExplainer: React.FC<CitizenExplainerProps> = ({ record }) =>
         status: 'WARNING',
       }
     : {
-        hi: 'इस ज़मीन पर कोई बैंक बंधक या अदालती रोक नहीं है। यह पूर्णतः बेदाग और सुरक्षित है।',
-        en: 'No active bank mortgage or court stay is registered on this land. Clean title.',
+        hi: 'इस अभिलेख में कोई बैंक बंधक प्रविष्टि नहीं मिली। यह केवल इसी दस्तावेज़ पर आधारित है; बैंक/रजिस्ट्री से अलग से जाँच करें।',
+        en: 'No mortgage entry was found on this record. Based on this document only; check with the bank/registry separately.',
         status: 'CLEAN',
       };
 
@@ -338,6 +338,11 @@ export const CitizenExplainer: React.FC<CitizenExplainerProps> = ({ record }) =>
                   <span className="font-bold text-slate-900">
                     {idx + 1}. {owner.cleanName}
                   </span>
+                  {(owner.name.confidenceTier === 'low' || /\d/.test(owner.cleanName)) && (
+                    <span className="block text-[10px] text-amber-700">
+                      {lang === 'hi' ? '⚠ यह नाम साफ़ नहीं पढ़ा गया — मूल दस्तावेज़ देखें' : '⚠ Not read clearly — check the original document'}
+                    </span>
+                  )}
                   {owner.cleanRel && (
                     <span className="text-slate-500 block text-[11px]">
                       पुत्र / संरक्षक: {owner.cleanRel}
@@ -345,7 +350,7 @@ export const CitizenExplainer: React.FC<CitizenExplainerProps> = ({ record }) =>
                   )}
                 </div>
                 <span className="font-bold font-mono px-2 py-0.5 rounded bg-emerald-100 text-emerald-900 text-[11px]">
-                  {cleanIndicText(owner.shareFraction.value)}
+                  {cleanIndicText(owner.shareFraction.value) || (lang === 'hi' ? 'हिस्सा दर्ज नहीं' : 'share not stated')}
                 </span>
               </div>
             ))}
@@ -353,8 +358,8 @@ export const CitizenExplainer: React.FC<CitizenExplainerProps> = ({ record }) =>
 
           <div className="text-[11px] text-slate-500 italic bg-amber-50/60 p-2 rounded border border-amber-200/60">
             💡 {lang === 'hi' 
-              ? 'आसान शब्दों में: सभी खातेदारों का अपनी-अपनी हिस्सेदारी पर कानूनी समभाग अधिकार है।' 
-              : 'Plain explanation: Each owner holds their legally defined proportional title.'}
+              ? 'आसान शब्दों में: हर खातेदार का हिस्सा ऊपर दर्ज है। जहाँ हिस्सा दर्ज नहीं है, वहाँ बराबर हिस्सा न मानें — तहसील से पुष्टि करें।'
+              : 'In simple words: each holder\'s share is shown above. Where no share is stated, do not assume equal shares; confirm with the tehsil.'}
           </div>
         </div>
 
@@ -411,12 +416,12 @@ export const CitizenExplainer: React.FC<CitizenExplainerProps> = ({ record }) =>
             <CheckCircle2 className="w-4 h-4 text-purple-700 shrink-0 mt-0.5" />
             <div>
               <strong className="font-bold">
-                {lang === 'hi' ? 'श्रेणी: संक्रमणीय भूमिधर (Freehold Ownership)' : 'Status: Transferable Title (Freehold)'}
+                {lang === 'hi' ? 'अभिलेख में श्रेणी: ' : 'Land class on record: '}{record.plots.map((p) => cleanIndicText(p.landClassification?.value || '')).filter(Boolean).join(', ') || (lang === 'hi' ? 'दर्ज नहीं' : 'not recorded')}
               </strong>
               <p className="text-[11px] mt-0.5 text-purple-900">
                 {lang === 'hi'
-                  ? 'हाँ! यह ज़मीन पुश्तैनी मालिकाना हक वाली है। इसे बैनामा (Sale Deed), वसीयत (Will), अथवा दान (Gift) द्वारा हस्तांतरित करने का पूरा कानूनी अधिकार है।'
-                  : 'Yes. Owners possess permanent freehold rights to cultivate, sell, gift, or pass on to lawful heirs without government sanction.'}
+                  ? 'यह उपकरण बिक्री या हस्तांतरण की वैधता तय नहीं करता। भूमि श्रेणी के अनुसार नियम अलग होते हैं; तहसील या वकील से पुष्टि करें।'
+                  : 'This tool does not decide whether the land can be sold or transferred. Rules depend on the land class; confirm with the tehsil or a lawyer.'}
               </p>
             </div>
           </div>
@@ -457,7 +462,7 @@ export const CitizenExplainer: React.FC<CitizenExplainerProps> = ({ record }) =>
               <strong className="font-bold">
                 {encumbranceDetails.status === 'WARNING' 
                   ? (lang === 'hi' ? 'सावधानी: बैंक बंधक दर्ज है' : 'Notice: Active Bank Mortgage')
-                  : (lang === 'hi' ? 'सुरक्षित: कोई रोक या ऋण नहीं' : 'Clean Title: No Encumbrance')}
+                  : (lang === 'hi' ? 'इस अभिलेख में बंधक प्रविष्टि नहीं' : 'No mortgage entry on this record')}
               </strong>
               <p className="text-[11px] mt-0.5 leading-relaxed">
                 {lang === 'hi' ? encumbranceDetails.hi : encumbranceDetails.en}
@@ -467,8 +472,8 @@ export const CitizenExplainer: React.FC<CitizenExplainerProps> = ({ record }) =>
 
           <div className="text-[11px] text-slate-500">
             {lang === 'hi'
-              ? 'स्तम्भ ६ की जांच: ऑनलाइन वरासत प्रविष्टि नियमानुसार सत्यापित है।'
-              : 'Column 6 Audit: Mutation succession lawfully recorded.'}
+              ? 'वरासत/नामांतरण (स्तम्भ ६) का विवरण मूल खतौनी में देखें; यह सारांश उसकी वैधता तय नहीं करता।'
+              : 'For succession/mutation entries (column 6), read the original khatauni; this summary does not judge them.'}
           </div>
         </div>
       </div>

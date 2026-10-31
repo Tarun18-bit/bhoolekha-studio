@@ -17,6 +17,8 @@ def parse_regional_land_area(input_str: str) -> Dict[str, Any]:
     Parses strings like '2 Bigha 4 Biswa', '18 Guntha', '0.45 Hectare' into standard SI metrics.
     """
     clean = (input_str or "").strip().lower()
+    clean = re.sub(r"हे[०o\.]?(?=\s|$|\))", " hectare ", clean)  # 'हे०' abbreviation used in RoRs
+    clean = clean.translate(str.maketrans("०१२३४५६७८९౦౧౨౩౪౫౬౭౮౯", "01234567890123456789"))
     sq_m = 0.0
 
     # Hectares
@@ -43,11 +45,17 @@ def parse_regional_land_area(input_str: str) -> Dict[str, Any]:
         if match:
             sq_m += float(match.group(1)) * UNIT_CONSTANTS["GUNTHA_TO_SQ_M"]
 
-    # Acre
-    if any(a in clean for a in ["acre", "एकड़"]):
-        match = re.search(r"([\d.]+)\s*(acre|एकड़)", clean)
+    # Acre / ఎకరాలు
+    if any(a in clean for a in ["acre", "एकड़", "ఎకరం", "ఎకరాలు", "ac"]):
+        match = re.search(r"([\d.]+)\s*(acre|एकड़|ఎకరం|ఎకరాలు|ac)", clean)
         if match:
             sq_m += float(match.group(1)) * UNIT_CONSTANTS["ACRE_TO_SQ_M"]
+
+    # Cents / సెంట్లు
+    if any(c in clean for c in ["cent", "cents", "సెంట్", "సెంట్లు"]):
+        match = re.search(r"([\d.]+)\s*(cent|cents|సెంట్|సెంట్లు)", clean)
+        if match:
+            sq_m += float(match.group(1)) * UNIT_CONSTANTS["CENT_TO_SQ_M"]
 
     # Numeric fallback
     if sq_m == 0.0:

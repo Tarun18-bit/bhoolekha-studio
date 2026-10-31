@@ -11,6 +11,7 @@ const KNOWN_INDIC_PAIRS: [RegExp, string][] = [
   [/रा\s*जे\s*श/g, 'राजेश'],
   [/या\s*द\s*व/g, 'यादव'],
   [/रा\s*म\s*न\s*क्ष\s*त्र/g, 'रामनक्षत्र'],
+  [/रा\s*म\s*ने\s*वा\s*ज/g, 'रामनेवाज'],
   [/ला\s*ल\s*ब\s*ची/g, 'लालबची'],
   [/सु\s*नी\s*ल/g, 'सुनील'],
   [/शि\s*व\s*स\s*र\s*न/g, 'शिवसरन'],
@@ -44,7 +45,11 @@ const KNOWN_INDIC_PAIRS: [RegExp, string][] = [
   [/म\s*च\s*ह\s*टी/g, 'मचहटी'],
   [/म\s*हु\s*आ\s*र/g, 'महुआर'],
   [/सं\s*क्र\s*म\s*णी\s*य/g, 'संक्रमणीय'],
+  [/जो\s*सं\s*क्र\s*म\s*णी\s*य|जोसंक्रमणीय/g, 'जो संक्रमणीय'],
+  [/जु\s*ला\s*ई/g, 'जुलाई'],
   [/भू\s*मि\s*ध\s*र/g, 'भूमिधर'],
+  [/फ\s*स\s*ली/g, 'फसली'],
+  [/हे\s*०|हे\s*0/g, 'हे०'],
   [/क्ष\s*े\s*त्र\s*फ\s*ल/g, 'क्षेत्रफल'],
   [/खा\s*ता/g, 'खाता'],
   [/गा\s*टा/g, 'गाटा'],
@@ -62,8 +67,9 @@ export function cleanIndicText(raw: string): string {
   if (!raw) return '';
   let t = raw.trim();
 
-  // 1. Strip leading serial numbers (e.g. "1) ", "2. ", "(1) ", "1-")
-  t = t.replace(/^\s*(?:\d+[\.\)\-:]|\(\d+\))\s*/g, '');
+  // 1. Strip leading serial numbers (e.g. "1) ", "(1) ", but preserve decimals like "1.0" and codes like "1-Ka")
+  t = t.replace(/^\s*(?:\(\d+\)|\d+\))\s*/g, '');
+  t = t.replace(/^\s*\d+\.\s+(?=[^\d\s])/g, '');
 
   // 2. Join split matras
   t = t.replace(COMBINING_MARKS, '$1$2');
@@ -72,6 +78,20 @@ export function cleanIndicText(raw: string): string {
   for (const [pattern, replacement] of KNOWN_INDIC_PAIRS) {
     t = t.replace(pattern, replacement);
   }
+
+  // 4a. Join a 1-2 letter fragment onto the previous word when that word ends in a vowel sign
+  //     (PDF kerning split: "रामकुमा र" -> "रामकुमार", "महे श" -> "महेश")
+  const isDevWord = (w: string) => /^[\u0900-\u097F]+$/.test(w);
+  const pre: string[] = [];
+  for (const tok of t.split(/\s+/)) {
+    const prev = pre[pre.length - 1];
+    if (prev && tok.length <= 2 && isDevWord(tok) && !DEVANAGARI_STOP_WORDS.has(tok) && isDevWord(prev) && /[\u093E-\u094C]$/.test(prev)) {
+      pre[pre.length - 1] = prev + tok;
+    } else {
+      pre.push(tok);
+    }
+  }
+  t = pre.join(' ');
 
   // 4. Smart Devanagari single-character token stitcher
   const tokens = t.split(/\s+/);
@@ -115,6 +135,19 @@ export function formatKhataForSpeech(khata: string): string {
     return isNaN(parsed) ? khata : parsed.toString();
   }
   return khata;
+}
+
+/**
+ * Converts Devanagari numerals (०-९) to Hindu-Arabic digits (0-9)
+ */
+export function devanagariToArabicNumerals(text: string): string {
+  if (!text) return '';
+  const devDigits = ['०', '१', '२', '३', '४', '५', '६', '७', '८', '९'];
+  let res = text;
+  for (let i = 0; i < 10; i++) {
+    res = res.replaceAll(devDigits[i], i.toString());
+  }
+  return res;
 }
 
 /**
@@ -206,9 +239,6 @@ export function generateNaturalHindiSpeech(params: {
       ownersSentence = `इसके मुख्य खातेदार ${detailed} हैं।`;
     }
 
-    if (validOwners.length > 1) {
-      ownersSentence += ' सभी खातेदारों का इस ज़मीन पर बराबर अंश है।';
-    }
   }
 
   // Natural area phrasing: e.g. "~5.6 Biswa" or acres
@@ -233,14 +263,14 @@ export function generateNaturalHindiSpeech(params: {
   }
 
   // Legal rights sentence
-  const rightsSentence = params.isTransferable
-    ? 'यह संक्रमणीय भूमिधरी ज़मीन है, जिसे बेचने, वसीयत करने और खेती करने का पूरा कानूनी अधिकार है।'
-    : 'यह अ-संक्रमणीय अथवा पट्टा भूमि है।';
+  // Transfer rights are a legal question; this tool does not decide them.
+  void params.isTransferable;
+  const rightsSentence = 'बिक्री या हस्तांतरण के अधिकार के लिए तहसील से पुष्टि करें।';
 
   // Encumbrance sentence
   const encumbranceSentence = params.hasEncumbrance
     ? `सावधानी: ${params.encumbranceText || 'इस ज़मीन पर बैंक ऋण दर्ज है, अतः किसी भी हस्तांतरण से पूर्व अनापत्ति प्रमाणपत्र आवश्यक है।'}`
-    : 'इस ज़मीन पर कोई बैंक बंधक या कानूनी रोक नहीं है, यह पूर्णतः सुरक्षित है।';
+    : 'इस अभिलेख में कोई बैंक बंधक प्रविष्टि नहीं मिली।';
 
   return `${locationSentence} ${ownersSentence} कुल रकबा ${areaPhrase} है। ${rightsSentence} ${encumbranceSentence}`;
 }
@@ -283,7 +313,7 @@ export function generateNaturalEnglishSpeech(params: {
     const joinedNames = names.length === 1 ? names[0] : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
 
     if (allSameRelative && firstRel) {
-      ownersPhrase = `The registered landholders are ${joinedNames}, sons of ${firstRel}, with equal holding shares.`;
+      ownersPhrase = `The registered landholders are ${joinedNames}, sons of ${firstRel}.`;
     } else {
       ownersPhrase = `The registered landholders are ${joinedNames}.`;
     }
@@ -305,13 +335,12 @@ export function generateNaturalEnglishSpeech(params: {
     ? `The total area is approximately ${params.totalAcres} acres.`
     : `The total area is approximately ${params.totalSqMeters.toLocaleString()} square meters.`;
 
-  const titlePhrase = params.isTransferable
-    ? 'This is permanent transferable freehold land with full legal rights to sell, gift, or inherit.'
-    : 'This is non-transferable leasehold land.';
+  void params.isTransferable;
+  const titlePhrase = 'Confirm sale or transfer rights with the tehsil; this tool does not decide them.';
 
   const loanPhrase = params.hasEncumbrance
     ? `Notice: ${params.encumbranceText || 'An active bank loan is registered on this holding. Clearance required before transfer.'}`
-    : 'Clean title: There are no active bank mortgages or court injunctions registered.';
+    : 'No mortgage entry was found on this record.';
 
   return `${locationPhrase} ${ownersPhrase} ${areaPhrase} ${titlePhrase} ${loanPhrase}`;
 }

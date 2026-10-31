@@ -142,60 +142,8 @@ export const VoiceAssistantWidget: React.FC<VoiceAssistantWidgetProps> = ({ reco
     setInputText('');
     setIsThinking(true);
 
-    // Try calling backend FastAPI endpoint first, with instant deterministic fallback
-    let finalAnswer: AssistantResponse | null = null;
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 2500);
-
-      const resp = await fetch('http://127.0.0.1:8000/api/assistant/ask', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        signal: controller.signal,
-        body: JSON.stringify({
-          query: queryText,
-          record_context: {
-            khataNumber: record.khataNumber.value,
-            village: record.village,
-            district: record.district,
-            tehsil: record.tehsil,
-            owners: record.owners.map((o) => ({
-              name: o.name.value,
-              relative: o.relativeName.value,
-              share: o.shareFraction.value
-            })),
-            plots: record.plots.map((p) => ({
-              khasraNumber: p.khasraNumber.value,
-              areaHectares: p.areaInHectares,
-              areaSqM: p.areaInSqMeters
-            })),
-            discrepancies: record.discrepancies
-          },
-          lang
-        })
-      });
-
-      clearTimeout(timeoutId);
-
-      if (resp.ok) {
-        const data = await resp.json();
-        if (data.spoken_text && data.display_text) {
-          finalAnswer = {
-            spokenText: data.spoken_text,
-            displayText: data.display_text,
-            category: 'GENERAL',
-            suggestedQuestions: data.suggested_follow_ups || []
-          };
-        }
-      }
-    } catch {
-      // Backend unavailable; seamlessly handled by deterministic local engine below
-    }
-
-    // High-precision local domain engine (calculates exact parcel math)
-    if (!finalAnswer) {
-      finalAnswer = answerLandRecordQuery(queryText, record, lang);
-    }
+    // Answers come from the record only (see utils/voiceAssistantEngine.ts).
+    const finalAnswer: AssistantResponse = answerLandRecordQuery(queryText, record, lang);
 
     setIsThinking(false);
 
