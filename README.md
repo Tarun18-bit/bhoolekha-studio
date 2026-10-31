@@ -1,7 +1,7 @@
 # भू-लेखा Studio — BhooLekha Studio
 
 **AI-assisted land record digitization and validation, with a human officer in the loop.**
-Built for Smart India Hackathon problem statement **SIH26018 — Intelligent Land Record Digitization and Validation System**
+ — Intelligent Land Record Digitization and Validation System**
 (Ministry of Rural Development, Department of Land Resources).
 
 > This is an assistive tool. It reads and checks land records; it does **not** decide legal title or disputes.
