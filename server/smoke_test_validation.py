@@ -5,7 +5,7 @@ Runs against a COPY of bhoolekha.db, so your real database is untouched.
     cd server
     python smoke_test_validation.py
 """
-import base64, os, shutil, sys, tempfile
+import base64, os, re, shutil, sys, tempfile
 from pathlib import Path
 
 HERE = Path(__file__).parent
@@ -128,7 +128,9 @@ if idx is not None:
     n = learning.apply_learned_rules(rec3, db)
     score_record(rec3); learning.calibrate(rec3, db)
     f = rec3["owners"][idx]["name"]
-    check(n >= 1 and f["value"] == "सुधारित नाम" and f["rawOcrValue"] == misread, "next upload is auto-corrected, original reading kept")
+    check(n >= 1, f"learned rule applied to the next upload ({n} field)")
+    check(f["value"] == "सुधारित नाम", f"field value auto-corrected (got {f['value']!r})")
+    check((f.get("learnedCorrection") or {}).get("from") == misread, "original machine reading kept with the correction")
     check(not f["isVerified"] and f["confidenceTier"] != "high", "auto-corrected field still needs officer review")
     check("सुधारित नाम" in learning.prompt_hints(db, "Uttar Pradesh"), "correction is fed into the extraction prompt")
     p3 = save_extracted_record(rec3, db)
@@ -143,10 +145,19 @@ check(st["reviewsLogged"] >= 3 and st["accuracySeries"], f"accuracy-over-time se
 # ---- Govt comparison, consistency, history, GIS ---------------------------------------
 import govt_registry, consistency
 print("\ngovt dataset / checks:")
-up = get_parcel_by_id(ids[0], db)
+# fresh upload (the learning test above renamed a holder on ids[0] / ids[1])
+_fresh = extract_land_record_from_image(data, "Uttar Pradesh", "Khasra-Khatauni", "", "")
+score_record(_fresh)
+up = save_extracted_record(_fresh, db).to_dict()
 cmp = govt_registry.compare(up)
 check(cmp["found"] and cmp["khata"] == "00287", "uploaded PDF matched to govt khata 00287")
-check(cmp["summary"]["missing_in_upload"] >= 3, f"comparison lists holders the parser missed ({cmp['summary']['missing_in_upload']} rows)")
+n_up = len([o for o in up["owners"] if o["name"]["value"]])
+check(n_up == 11, f"PDF column reader found all 11 holders (got {n_up})")
+missing_holders = [r for r in cmp["rows"] if r["section"] == "Owners" and r["status"] == "missing_in_upload" and r["field"].startswith("Holder")]
+check(not missing_holders, f"no govt holder missing from the upload ({[r['govt'] for r in missing_holders]})")
+names = [o["name"]["value"] for o in up["owners"]]
+check(not any(re.search(r"\d|\)", n) for n in names), "holder names clean (no serial numbers / junk rows)")
+check(not any(re.search(r"\S[\u0941\u0942] \S{1,3}(\s|$)", n) for n in names), "no kerning-split names left (e.g. 'कु मार')")
 hist = govt_registry.history(up)
 check(len(hist["timeline"]) >= 4, "history has govt versions + the upload")
 check(any("still listed" in f["message"] for f in hist["flags"]), "history flags the 2023 order that was not reflected in the record")
@@ -161,6 +172,19 @@ check(summ["recordsChecked"] == len(get_all_parcels(db)), "consistency summary c
 v = govt_registry.village_for(up)
 gj = govt_registry.village_geojson(v, {}, ["365"])
 check(len(gj["features"]) > 10 and any(f["properties"]["inCurrentRecord"] for f in gj["features"]), "GIS: village plots with the record's plot highlighted")
+
+# ---- Real bounding boxes from the PDF text layer ---------------------------------------
+print("\nbounding boxes:")
+b = get_parcel_by_id(ids[0], db)
+kb = b["khataNumber"]
+check(kb.get("hasBoundingBox") and 0 <= kb["boundingBox"]["x"] <= 100 and 0 <= kb["boundingBox"]["y"] <= 100, f"khata box measured from the PDF: {kb.get('boundingBox')}")
+ob = [o["name"] for o in b["owners"] if o["name"].get("hasBoundingBox")]
+check(len(ob) >= 3, f"{len(ob)} owner name boxes measured")
+if ob and kb.get("hasBoundingBox"):
+    check(kb["boundingBox"]["y"] < ob[0]["boundingBox"]["y"], "khata (header) sits above the owners table")
+seed = get_parcel_by_id("rec-up-jaunpur-548", db)
+if seed:
+    check(not seed["khataNumber"].get("hasBoundingBox"), "seed record without measured positions shows no box")
 
 try:
     from fastapi.testclient import TestClient

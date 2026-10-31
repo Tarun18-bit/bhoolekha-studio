@@ -1,3 +1,4 @@
+import re
 import json
 import datetime
 import hashlib
@@ -789,7 +790,12 @@ def save_extracted_record(doc: Dict[str, Any], db: Session, file_sha: Optional[s
         rel_dict = o.get("relativeName") if isinstance(o.get("relativeName"), dict) else {}
         rel = rel_dict.get("value", "") if rel_dict else str(o.get("relativeName", ""))
         share_dict = o.get("shareFraction") if isinstance(o.get("shareFraction"), dict) else {}
-        share = share_dict.get("value", f"1/{owner_count}") if share_dict else str(o.get("shareFraction", ""))
+        share = share_dict.get("value", "") if share_dict else str(o.get("shareFraction", ""))
+        # Per-holder area only when the share is actually stated (never assume equal shares)
+        _fr = re.search(r"(\d+)\s*/\s*(\d+)", share or "")
+        _ha = re.search(r"(\d+\.\d+)\s*हे", share or "")
+        frac = (int(_fr.group(1)) / int(_fr.group(2))) if _fr and int(_fr.group(2)) else \
+               ((float(_ha.group(1)) / total_ha) if _ha and total_ha else None)
         
         conf = float(name_dict.get("confidence", 0.95) if name_dict else o.get("confidence", 0.95))
         conf_tier = name_dict.get("confidenceTier", "high") if name_dict else ("low" if conf < 0.6 else "high")
@@ -809,10 +815,10 @@ def save_extracted_record(doc: Dict[str, Any], db: Session, file_sha: Optional[s
             relation_type=o.get("relationType", "s/o"),
             relative_name=rel,
             share_fraction=share,
-            share_percentage=round(100.0 / owner_count, 2),
-            individual_ha=round(total_ha / owner_count, 4),
-            individual_sq_m=round(total_sq_m / owner_count, 1),
-            individual_biswa=round(total_biswa / owner_count, 2),
+            share_percentage=round(100.0 * frac, 2) if frac is not None else 0.0,
+            individual_ha=round(total_ha * frac, 4) if frac is not None else 0.0,
+            individual_sq_m=round(total_sq_m * frac, 1) if frac is not None else 0.0,
+            individual_biswa=round(total_biswa * frac, 2) if frac is not None else 0.0,
             mobile_number=o.get("mobileNumber"),
             confidence=conf,
             confidence_tier=conf_tier,

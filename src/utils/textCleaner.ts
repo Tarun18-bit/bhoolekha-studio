@@ -85,7 +85,8 @@ export function cleanIndicText(raw: string): string {
   const pre: string[] = [];
   for (const tok of t.split(/\s+/)) {
     const prev = pre[pre.length - 1];
-    if (prev && tok.length <= 2 && isDevWord(tok) && !DEVANAGARI_STOP_WORDS.has(tok) && isDevWord(prev) && /[\u093E-\u094C]$/.test(prev)) {
+    if (prev && isDevWord(tok) && !DEVANAGARI_STOP_WORDS.has(tok) && isDevWord(prev) &&
+        (prev.endsWith('\u094D') || (tok.length <= 2 && /[\u093E-\u094C]$/.test(prev)) || (tok.length <= 3 && /[\u0941\u0942]$/.test(prev)))) {
       pre[pre.length - 1] = prev + tok;
     } else {
       pre.push(tok);

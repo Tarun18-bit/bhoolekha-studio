@@ -82,8 +82,12 @@ def clean_indic_text(text: str) -> str:
     #     (PDF kerning split: "रामकुमा र" -> "रामकुमार", "महे श" -> "महेश")
     pre: List[str] = []
     for tok in t.split():
-        if (pre and len(tok) <= 2 and re.match(r'^[\u0900-\u097F]+$', tok) and tok not in INDIC_STOP_WORDS
-                and re.search(r'[\u093E-\u094C]$', pre[-1]) and re.match(r'^[\u0900-\u097F]+$', pre[-1])):
+        if (pre and re.match(r'^[\u0900-\u097F]+$', tok) and tok not in INDIC_STOP_WORDS
+                and re.match(r'^[\u0900-\u097F]+$', pre[-1])
+                and (pre[-1].endswith('\u094D')            # a half letter never ends a word: "नेन् सी"
+                     or (len(tok) <= 2 and re.search(r'[\u093E-\u094C]$', pre[-1]))
+                     # this font always leaves a gap after the u-matra: "अजयकु मार", "सुनिलकु मार"
+                     or (len(tok) <= 3 and re.search(r'[\u0941\u0942]$', pre[-1])))):
             pre[-1] += tok
         else:
             pre.append(tok)

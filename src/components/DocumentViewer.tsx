@@ -41,23 +41,17 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
 
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Gather all bounding boxes across the document
-  const allBoxes: BoundingBox[] = [
-    record.khataNumber.boundingBox,
-    ...(record.fasliYear?.boundingBox ? [record.fasliYear.boundingBox] : []),
-    ...(record.totalStatedArea?.boundingBox ? [record.totalStatedArea.boundingBox] : []),
-    ...record.owners.flatMap((o) => [
-      o.name.boundingBox,
-      o.relativeName.boundingBox,
-      o.shareFraction.boundingBox,
-    ]),
-    ...record.plots.flatMap((p) => [
-      p.khasraNumber.boundingBox,
-      p.regionalAreaText.boundingBox,
-      p.landClassification.boundingBox,
-      p.annualRevenueLagaan.boundingBox,
-    ]),
-  ].filter(Boolean);
+  // Only boxes whose position was actually measured (PDF text layer or OCR). Fields without a
+  // measured position get no box, rather than a box in the wrong place.
+  const fields = [
+    record.khataNumber, record.fasliYear, record.totalStatedArea,
+    ...record.owners.flatMap((o) => [o.name, o.relativeName, o.shareFraction]),
+    ...record.plots.flatMap((p) => [p.khasraNumber, p.regionalAreaText, p.landClassification, p.annualRevenueLagaan]),
+  ];
+  const allBoxes: BoundingBox[] = fields
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    .filter((f) => f && (f as any).hasBoundingBox === true && f.boundingBox && f.boundingBox.width > 0)
+    .map((f) => f!.boundingBox);
 
   const handleZoomIn = () => setZoom((prev) => Math.min(prev + 0.25, 2.5));
   const handleZoomOut = () => setZoom((prev) => Math.max(prev - 0.25, 0.75));

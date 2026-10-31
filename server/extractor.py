@@ -108,6 +108,32 @@ def extract_land_record_from_image(
             statutory_doc = parse_up_bhulekh_pdf_text(pdf_text, image_base64)
             if statutory_doc:
                 statutory_doc["extractionSource"] = "statutory_pdf_text"
+                # Holders: read column (2) by position (handles wrapped names, minors, guardians)
+                try:
+                    from bhulekh_columns import words_from_pdf, parse_holders, parse_holders_from_pdf
+                    from record_builder import make_owner
+                    holders = parse_holders_from_pdf(raw_bytes)
+                    if len(holders) < 2:
+                        holders = parse_holders(words_from_pdf(raw_bytes))
+                    if len(holders) >= max(2, len(statutory_doc.get("owners") or [])) - 1 and holders:
+                        owners = []
+                        for i, h in enumerate(holders):
+                            o = make_owner(i, h["name"], h["relative"], "", source_confidence=0.97)
+                            o["name"]["rawOcrValue"] = h["raw"]
+                            if h.get("minorAge") is not None:
+                                o["minorAge"] = h["minorAge"]
+                                o["guardian"] = h.get("guardian")
+                            owners.append(o)
+                        print(f"[Holders] Column reader found {len(owners)} holder(s) (line parser had {len(statutory_doc.get('owners') or [])})")
+                        statutory_doc["owners"] = owners
+                except Exception as col_err:
+                    print(f"[Holders] Column reader unavailable: {col_err}")
+                try:
+                    from pdf_boxes import locate
+                    n_boxes = locate(raw_bytes, statutory_doc)   # real positions from the PDF text layer
+                    print(f"[Boxes] Located {n_boxes} field(s) on the page")
+                except Exception as box_err:
+                    print(f"[Boxes] Could not locate fields: {box_err}")
                 print(f"[Success] Extracted statutory document with {len(statutory_doc['owners'])} owners and {len(statutory_doc['discrepancies'])} flags!")
                 return statutory_doc
     except Exception as e:
