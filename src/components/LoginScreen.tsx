@@ -48,7 +48,7 @@ export const LoginScreen: React.FC<{ onLogin: (u: SessionUser) => void; notice?:
           className="w-full bg-emerald-700 hover:bg-emerald-800 disabled:opacity-50 text-white font-semibold text-sm rounded-lg py-2 flex items-center justify-center gap-2">
           <LogIn className="w-4 h-4" /> {busy ? 'Signing in…' : 'Sign in'}
         </button>
-        <a href="/citizen" className="block text-center text-xs font-semibold text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg py-2 hover:bg-emerald-100">
+        <a href="/" className="block text-center text-xs font-semibold text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg py-2 hover:bg-emerald-100">
           नागरिक हैं? अपना खतौनी समझें → Citizen? Understand your land record
         </a>
         <div className="border-t border-slate-100 pt-3 text-[11px] text-slate-500 space-y-1">

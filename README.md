@@ -1,22 +1,49 @@
 # भू-लेखा Studio — BhooLekha Studio
 
-**AI-assisted land record digitization and validation, with a human officer in the loop.**
-Built for Smart India Hackathon problem statement **SIH26018 — Intelligent Land Record Digitization and Validation System**
-(Ministry of Rural Development, Department of Land Resources).
+**AI that finds the mistakes in land records before they cost citizens years in court.**
 
-> This is an assistive tool. It reads and checks land records; it does **not** decide legal title or disputes.
-> Every record is approved by a revenue officer before it counts.
+Build for Bharat — *Reimagine Government Digital Services for the Next Billion Citizens* — **Open Innovation (AI/ML) track**.
+
+> An assistive tool: it reads and checks land records and explains them in plain language. It does **not** decide
+> legal title or disputes. Every official record is approved by a revenue officer, and the tehsil record is the authority.
 
 ---
 
-## What it does
+## Problem → Data → AI → Output → Citizen benefit
+
+| | |
+|---|---|
+| **Problem** | India's land records are digitised (99.8% of Records of Rights), but they still carry old mistakes: inheritance and court orders that were never applied, shares that don't add up, the same person listed twice. Citizens find out only when a sale, a bank loan or a court case gets stuck, and most can't read a khatauni in the first place. |
+| **Data** | The citizen's own Bhulekh khatauni (PDF or photo), older paper records digitised by the revenue office, and the government record (Bhulekh / Bhu-Naksha style registry). |
+| **AI / ML** | Multilingual **document intelligence** (PDF text layer, Gemini Vision for Hindi/Telugu scans, column-aware reading of the holders table); **anomaly detection** (14 consistency rules, orders-vs-holders check, comparison with the govt record, history across fasli years); **confidence scoring** with reasons; a **learning loop** from officer corrections. |
+| **Output** | For citizens: "possible problems in your record" in Hindi + English, each with *what you can do*, plus a plain explanation of who owns how much and whether a loan is recorded. For officers: flagged records, a review queue, a village map and a tamper-evident audit trail. |
+| **Citizen benefit** | Problems are found early, from the citizen's own document, before they block a sale, loan or inheritance, and the revenue office gets a verified, fixable list instead of disputes years later. |
+
+Example from a real Bhulekh khatauni: the record's own remarks say a 2023 order cancelled one holder's name, yet the
+name is still listed. A citizen would never spot this; the system flags it in seconds and tells them to ask the tehsil
+whether the order was implemented.
+
+---
+
+## Responsible AI
+
+- **Never invents data:** unreadable fields stay blank and are flagged; no example values, no assumed equal shares
+- **Transparent:** every confidence score and every finding comes with its reason; the assistant says "not recorded" instead of guessing
+- **Human in the loop:** nothing becomes official without an officer's approval; the uploader cannot approve (role separation)
+- **Accountable:** hash-chained audit trail, so any edit to past entries is detected
+- **Private:** the citizen page stores nothing; scans and the database never leave the processing machine; the public repository uses anonymised data
+- **Honest scope:** findings are worded as "possible" and point to the tehsil, the legal authority
+
+---
+
+## How it works
 
 An operator uploads an old land record (Bhulekh PDF, scan or photo). The system reads it, scores how sure it is about
 every field, checks it against the government record and against its own internal rules, and sends it to a
 verifier, who corrects, resolves and approves it. Every action is logged in a tamper-evident audit trail, and
 officer corrections teach the system to read better next time.
 
-| SIH26018 asks for | Where it is |
+| Capability | Where it is |
 |---|---|
 | Multilingual extraction from scans, handwriting, PDFs | Bhulekh PDF text layer → Gemini Vision (Hindi, Telugu, …) → Tesseract → manual entry. Nothing is ever invented: unreadable fields are left blank and flagged. |
 | Field classification + confidence scoring, uncertain fields | Per-field confidence with reasons (source, format checks, area arithmetic, model uncertainty); high / medium / low tiers |
@@ -28,8 +55,9 @@ officer corrections teach the system to read better next time.
 | Dashboard | Documents processed, accuracy, validation status, pending queue, error stats by type, state/district progress, audit-chain status, learning panel |
 | APIs | FastAPI, OpenAPI docs at `http://127.0.0.1:8001/docs` |
 
-**Extra:** a public **citizen page** (`/citizen`) where a landholder uploads their own Bhulekh PDF and gets it explained in
-simple Hindi/English. No login, nothing stored.
+**Citizen front door** (`http://localhost:5173/`): a landholder uploads their own Bhulekh PDF or photo and gets the
+problems found in it, a plain-language explanation and a voice assistant, in Hindi and English. No login, nothing stored.
+Officers sign in at `/officer`.
 
 ---
 
@@ -114,7 +142,7 @@ npm run dev                     # http://localhost:5173
 | `verifier` | Naib Tehsildar | correct, resolve discrepancies, approve and seal (cannot upload) |
 | `admin` | District admin | everything |
 
-Citizen page: `http://localhost:5173/citizen`
+Citizen page: `http://localhost:5173/` · Officer workbench: `http://localhost:5173/officer`
 
 **Useful commands** (in `server/`):
 

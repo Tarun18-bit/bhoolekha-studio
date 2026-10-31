@@ -9,8 +9,9 @@ import { installAuthFetch, restoreSession, setToken, type SessionUser } from './
 installAuthFetch()
 
 function Root() {
-  if (window.location.pathname.startsWith('/citizen')) return <CitizenPortal />
-  return <OfficerApp />
+  // Citizens land on the explainer; officers use /officer
+  if (window.location.pathname.startsWith('/officer')) return <OfficerApp />
+  return <CitizenPortal />
 }
 
 function OfficerApp() {

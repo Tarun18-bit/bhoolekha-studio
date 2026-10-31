@@ -173,6 +173,15 @@ v = govt_registry.village_for(up)
 gj = govt_registry.village_geojson(v, {}, ["365"])
 check(len(gj["features"]) > 10 and any(f["properties"]["inCurrentRecord"] for f in gj["features"]), "GIS: village plots with the record's plot highlighted")
 
+# ---- Citizen findings ------------------------------------------------------------------
+import citizen_checks, pypdfium2
+print("\ncitizen findings:")
+_txt = "\n".join(pg.get_textpage().get_text_range() for pg in pypdfium2.PdfDocument(pdf.read_bytes()))
+_f = citizen_checks.findings(up, _txt)
+check(any(x["kind"] == "order_not_applied" for x in _f), "order printed in the khatauni but not applied is reported to the citizen")
+check(any(x["kind"] == "mortgage" for x in _f), "bank mortgage reported to the citizen")
+check(all(x["action"]["hi"] and x["action"]["en"] for x in _f), "every finding says what the citizen can do (Hindi + English)")
+
 # ---- Real bounding boxes from the PDF text layer ---------------------------------------
 print("\nbounding boxes:")
 b = get_parcel_by_id(ids[0], db)

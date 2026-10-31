@@ -90,6 +90,20 @@ async def explain(req: ExplainRequest, request: Request):
         engine.dispose()
 
     out["originalDocumentUrl"] = preview or ""
+    # Plain-language problems in the record (orders not applied, shares, deceased holders, mortgage)
+    full_text = ""
+    if is_pdf:
+        try:
+            import pypdfium2 as pdfium
+            full_text = "\n".join(p.get_textpage().get_text_range() for p in pdfium.PdfDocument(raw))
+        except Exception:
+            full_text = ""
+    try:
+        from citizen_checks import findings
+        out["citizenFindings"] = findings(out, full_text)
+    except Exception as e:
+        print(f"[Citizen] findings failed: {e}")
+        out["citizenFindings"] = []
     out["auditTrail"] = []
     out["citizenView"] = True
     out["notice"] = ("Machine reading of your document, not verified by any officer and not a legal "

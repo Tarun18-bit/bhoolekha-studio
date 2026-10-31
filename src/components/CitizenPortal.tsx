@@ -56,7 +56,7 @@ export const CitizenPortal: React.FC = () => {
         </div>
         {record
           ? <button onClick={() => { setRecord(null); setShowScan(false); }} className="text-xs text-emerald-800 font-semibold flex items-center gap-1"><ArrowLeft className="w-3.5 h-3.5" />Another document</button>
-          : <a href="/" className="text-xs text-slate-500 hover:text-slate-800">Officer login</a>}
+          : <a href="/officer" className="text-xs text-slate-500 hover:text-slate-800">अधिकारी लॉगिन · Officer login</a>}
       </header>
 
       <div className="bg-amber-50 border-b border-amber-200 text-amber-900 text-xs px-4 py-2 flex items-start gap-2">
@@ -103,6 +103,7 @@ export const CitizenPortal: React.FC = () => {
               {showScan && <img src={record.originalDocumentUrl} alt="Your uploaded document" className="mt-2 max-h-[70vh] w-auto mx-auto rounded-lg border border-slate-300 bg-white" />}
             </div>
           )}
+          <FindingsCard record={record} />
           <div className="flex-1 min-h-[600px] flex">
             <CitizenExplainer record={record} />
           </div>
@@ -110,5 +111,57 @@ export const CitizenPortal: React.FC = () => {
         </main>
       )}
     </div>
+  );
+};
+
+
+interface Finding {
+  severity: 'high' | 'medium' | 'low' | 'info';
+  kind: string;
+  title: { hi: string; en: string };
+  detail: { hi: string; en: string };
+  action: { hi: string; en: string };
+}
+
+const SEV: Record<string, { label: string; cls: string; dot: string }> = {
+  high: { label: 'ज़रूरी · Important', cls: 'border-rose-300 bg-rose-50', dot: 'bg-rose-600' },
+  medium: { label: 'जाँचें · Check', cls: 'border-amber-300 bg-amber-50', dot: 'bg-amber-500' },
+  low: { label: 'छोटी बात · Minor', cls: 'border-slate-300 bg-slate-50', dot: 'bg-slate-400' },
+  info: { label: 'जानकारी · Good to know', cls: 'border-blue-300 bg-blue-50', dot: 'bg-blue-500' },
+};
+
+const FindingsCard: React.FC<{ record: LandRecordDocument }> = ({ record }) => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const findings: Finding[] = (record as any).citizenFindings || [];
+  const problems = findings.filter((f) => f.severity !== 'info').length;
+  return (
+    <section className="mx-4 mt-3 bg-white rounded-2xl border border-slate-200 p-4 shadow-sm">
+      <h2 className="font-bold text-slate-900">
+        {problems > 0
+          ? `आपके अभिलेख में ${problems} संभावित समस्या मिली · ${problems} possible problem${problems === 1 ? '' : 's'} in your record`
+          : 'कोई स्पष्ट समस्या नहीं मिली · No obvious problems found'}
+      </h2>
+      <p className="text-[11px] text-slate-500 mt-0.5">
+        AI ने आपके दस्तावेज़ की जाँच की — आदेश, हिस्से, खातेदार और बंधक। यह कानूनी राय नहीं है; तहसील का अभिलेख ही मान्य है।
+        <span className="block">The AI checked orders, shares, holders and mortgages in your document. Not legal advice; the tehsil record is the authority.</span>
+      </p>
+      <div className="mt-3 space-y-2.5">
+        {findings.map((f, i) => (
+          <div key={i} className={`rounded-xl border p-3 ${SEV[f.severity]?.cls || ''}`}>
+            <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wide text-slate-600">
+              <span className={`w-2 h-2 rounded-full ${SEV[f.severity]?.dot}`} />{SEV[f.severity]?.label}
+            </div>
+            <div className="mt-1 font-semibold text-slate-900 text-sm">{f.title.hi}</div>
+            <div className="text-xs text-slate-600">{f.title.en}</div>
+            <p className="mt-1.5 text-xs text-slate-800">{f.detail.hi}</p>
+            {f.detail.en !== f.detail.hi && <p className="text-[11px] text-slate-600">{f.detail.en}</p>}
+            <div className="mt-2 text-xs bg-white/70 border border-slate-200 rounded-lg px-2.5 py-1.5">
+              <b>क्या करें · What you can do:</b> {f.action.hi}
+              <span className="block text-slate-600">{f.action.en}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
   );
 };
