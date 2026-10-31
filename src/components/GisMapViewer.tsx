@@ -143,7 +143,7 @@ export const GisMapViewer: React.FC<{ record: LandRecordDocument; onOpenRecord?:
       {geo && !geo.found && <div className="p-6 text-sm text-slate-600">{geo.message}</div>}
 
       {geo?.found && (
-        <div className="flex-1 relative min-h-[420px]" style={{ background: '#fff' }}>
+        <div className="flex-1 relative isolate z-0 min-h-[420px]" style={{ background: '#fff' }}>
           <div ref={el} className="absolute inset-0" style={{ background: '#fff' }} />
 
           {/* Title block, like a Bhu-Naksha sheet */}
