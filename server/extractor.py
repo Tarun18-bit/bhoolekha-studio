@@ -118,7 +118,13 @@ def extract_land_record_from_image(
                     if len(holders) >= max(2, len(statutory_doc.get("owners") or [])) - 1 and holders:
                         owners = []
                         for i, h in enumerate(holders):
-                            o = make_owner(i, h["name"], h["relative"], "", source_confidence=0.97)
+                            share = h.get("share", "")
+                            if h.get("shareStatus") == "clipped":
+                                share = f"{share} (कटा हुआ · cut off)"
+                            elif h.get("shareStatus") == "mutation":
+                                share = f"{share} (वरासत · inheritance entry)"
+                            o = make_owner(i, h["name"], h["relative"], share, source_confidence=0.97)
+                            o["shareStatus"] = h.get("shareStatus", "absent")
                             o["name"]["rawOcrValue"] = h["raw"]
                             if h.get("minorAge") is not None:
                                 o["minorAge"] = h["minorAge"]

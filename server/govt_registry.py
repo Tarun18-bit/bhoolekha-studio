@@ -145,7 +145,9 @@ def compare(rec: Dict[str, Any]) -> Dict[str, Any]:
             rs = _same_person(u["relative"], g["relative"])
             row("Owners", f"  father/husband of {g['name']}", u["relative"], g["relative"],
                 "missing_in_upload" if not u["relative"] else ("match" if rs >= 0.9 else "mismatch"))
-        if g.get("share") or u["share"]:
+        if "…" in (u["share"] or ""):
+            pass                                    # share cut off in this copy: not comparable
+        elif g.get("share") or u["share"]:
             gs, us = _num(g.get("share", "")), _num(u["share"])
             st2 = ("missing_in_upload" if not u["share"] else "missing_in_govt" if not g.get("share")
                    else "match" if gs is not None and us is not None and abs(gs - us) < 1e-4 else "mismatch")

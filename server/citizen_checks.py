@@ -104,6 +104,16 @@ def findings(rec: Dict[str, Any], full_text: Optional[str] = None) -> List[Dict[
     rule("C10", "low", "फसली वर्ष और तारीख मेल नहीं खाते", "Fasli year and calendar dates don't match",
          "यह छपाई की गलती हो सकती है; प्रमाणित प्रति से मिलान करें।", "This may be a printing error; compare with a certified copy.")
 
+    clipped = [_v(o.get("name")) for o in rec.get("owners") or [] if "…" in _v(o.get("shareFraction"))]
+    if clipped:
+        res.append({"severity": "low", "kind": "share_clipped",
+                    "title": {"hi": "आपकी PDF में हिस्से का कॉलम कटा हुआ है",
+                              "en": "The share column is cut off in your PDF"},
+                    "detail": {"hi": f"{len(clipped)} खातेदारों के हिस्से का केवल शुरुआती भाग (जैसे '1/') दिख रहा है; बाकी पन्ने के किनारे से कट गया है।",
+                               "en": f"Only the start of the share (e.g. '1/') is visible for {len(clipped)} holder(s); the rest is cut off at the page edge."},
+                    "action": {"hi": "भूलेख वेबसाइट से खतौनी दोबारा डाउनलोड करें — लैंडस्केप (आड़ा) या पूरी चौड़ाई में सेव करें।",
+                               "en": "Download the khatauni again from the Bhulekh website, saving it in landscape or full width."}})
+
     for d in rec.get("discrepancies") or []:
         if re.search(r"bank|बंधक|बैंक|mortgage", (d.get("id", "") + d.get("title", "")), re.I):
             res.append({"severity": "info", "kind": "mortgage",

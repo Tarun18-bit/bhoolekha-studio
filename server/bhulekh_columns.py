@@ -120,9 +120,10 @@ def parse_holders(words: List[Word], debug: bool = False) -> List[Dict[str, Any]
 
 
 
-def _blocks_to_holders(texts: List[str], debug: bool = False) -> List[Dict[str, Any]]:
+def _blocks_to_holders(texts: List[Any], debug: bool = False) -> List[Dict[str, Any]]:
     holders = []
-    for t in texts:
+    for item in texts:
+        serial, t = item if isinstance(item, tuple) else (None, item)
         text = re.sub(r"\s+", " ", t).strip()
         if debug:
             print("  BLOCK:", text)
@@ -145,7 +146,8 @@ def _blocks_to_holders(texts: List[str], debug: bool = False) -> List[Dict[str, 
         name = re.sub(r"\s+", " ", name)
         if len(name) < 2:
             continue
-        holders.append({"name": name, "relative": father, "minorAge": age, "guardian": guardian, "raw": text})
+        holders.append({"name": name, "relative": father, "minorAge": age, "guardian": guardian, "raw": text,
+                        "serial": serial})
     return holders
 
 
@@ -200,6 +202,67 @@ def parse_holders_from_pdf(pdf_bytes: bytes, debug: bool = False, max_pages: int
     hs = sorted(b[3] - b[1] for chars in pages for _, b in chars if b and b[3] > b[1])
     med_h = hs[len(hs) // 2] if hs else 10
 
+    text = _column_text(pages, x_lo, x_hi, p0, i0, y0, med_h)
+    cut = re.search(r"कु\s*ल\s*(गाटे|क्षे)", text)          # totals line ends the holders table
+    if cut:
+        text = text[:cut.start()]
+    if debug:
+        print("COLUMN TEXT:", text[:1500])
+    parts = re.split(r"(?:(?<=\s)|^)(\d{1,2})\)", text)
+    blocks = [(int(parts[k - 1]), parts[k]) for k in range(2, len(parts), 2)]   # (serial, text after marker)
+    holders = _blocks_to_holders(blocks, debug)
+    _attach_shares(holders, pages, rng, med_h, debug)
+    return holders
+
+
+def _attach_shares(holders, pages, rng, med_h, debug=False):
+    """Share column (7) "हिस्सा": one entry per serial. Some printouts clip this column at the page edge
+    so only "1/" survives; those are marked as cut off instead of being reported as 'not recorded'.
+    A holder added by inheritance may have their area only in the mutation table ("1.1) 0.1337 1.1) राजेश")."""
+    x_lo2, _, p0, i0, y0 = rng
+    hdr7 = None
+    for pi, chars in enumerate(pages):
+        txt = "".join(c for c, _ in chars)
+        for m in re.finditer(r"\(7", txt):
+            b7 = chars[m.start()][1]
+            if b7 and pi == p0 and b7[0] > x_lo2:
+                hdr7 = b7[0] - 3
+                break
+        if hdr7:
+            break
+    shares: Dict[int, str] = {}
+    if hdr7:
+        col = _column_text(pages, hdr7, 10_000, p0, i0, y0, med_h)
+        cur = None
+        for tok in col.split():
+            mm = re.fullmatch(r"(\d{1,2})\)?", tok)
+            if mm and "/" not in tok:
+                cur = int(mm.group(1)); shares.setdefault(cur, "")
+            elif cur is not None and not shares[cur] and re.fullmatch(r"[0-9०-९./]+", tok):
+                shares[cur] = tok                      # first share-like token after the serial
+        if debug:
+            print("SHARE COLUMN:", col[:300])
+    full = "\n".join("".join(c for c, _ in chars) for chars in pages)
+    mut = {}
+    for m in re.finditer(r"\d+\.\d+\)\s*(\d+\.\d{3,4})\s*\d+\.\d+\)\s*([^/\n]+)", full):
+        mut[re.sub(r"\s", "", clean_indic_text(m.group(2)))] = m.group(1)
+    for h in holders:
+        raw = shares.get(h.get("serial"), "")
+        if re.fullmatch(r"\d+/\d+", raw):
+            h["share"], h["shareStatus"] = raw, "read"
+        elif re.fullmatch(r"\d+/", raw):
+            h["share"], h["shareStatus"] = raw + "…", "clipped"
+        else:
+            area = mut.get(re.sub(r"\s", "", h["name"]))
+            if area:
+                h["share"], h["shareStatus"] = f"{area} हे०", "mutation"
+            else:
+                h["share"], h["shareStatus"] = "", "absent"
+
+
+def _column_text(pages, x_lo, x_hi, p0, i0, y0, med_h) -> str:
+    """Characters whose left edge lies in [x_lo, x_hi), in the PDF's own order, from the header down
+    to the totals line. Spaces are inserted where the PDF has a gap or switches column."""
     out, gap = [], False
     for pi in range(p0, len(pages)):
         chars = pages[pi]
@@ -224,12 +287,4 @@ def parse_holders_from_pdf(pdf_bytes: bytes, debug: bool = False, max_pages: int
             gap = False
         if endm:
             break
-    text = "".join(out)
-    cut = re.search(r"कु\s*ल\s*(गाटे|क्षे)", text)          # totals line ends the holders table
-    if cut:
-        text = text[:cut.start()]
-    if debug:
-        print("COLUMN TEXT:", text[:1500])
-    parts = re.split(r"(?:(?<=\s)|^)(\d{1,2})\)", text)
-    blocks = [parts[k] for k in range(2, len(parts), 2)]   # text after each serial marker
-    return _blocks_to_holders(blocks, debug)
+    return "".join(out)

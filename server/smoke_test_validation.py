@@ -181,6 +181,12 @@ _f = citizen_checks.findings(up, _txt)
 check(any(x["kind"] == "order_not_applied" for x in _f), "order printed in the khatauni but not applied is reported to the citizen")
 check(any(x["kind"] == "mortgage" for x in _f), "bank mortgage reported to the citizen")
 check(all(x["action"]["hi"] and x["action"]["en"] for x in _f), "every finding says what the citizen can do (Hindi + English)")
+_shares = [o["shareFraction"]["value"] for o in up["owners"]]
+check(sum("…" in v for v in _shares) >= 5, "cut-off shares shown as '1/…' (not as 'not recorded')")
+check(any("हे०" in v and "वरासत" in v for v in _shares), "share of the heir taken from the inheritance entry")
+check(any(x["kind"] == "share_clipped" for x in _f), "citizen told the share column is cut off and how to fix it")
+_sh_rows = [r for r in cmp["rows"] if r["field"].strip().startswith("share of") and r["status"] != "match"]
+check(not _sh_rows, f"cut-off shares are not reported as govt mismatches ({len(_sh_rows)})")
 
 # ---- Real bounding boxes from the PDF text layer ---------------------------------------
 print("\nbounding boxes:")
